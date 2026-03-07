@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>מערכת ניהול שמירות</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a; --surface: #111827; --surface2: #1a2236; --surface3: #222e45;
+    --accent: #3b82f6; --accent2: #6366f1; --green: #10b981; --red: #ef4444;
+    --text: #f1f5f9; --text2: #94a3b8; --text3: #64748b;
+    --border: #1e2d45; --radius: 14px; --radius-sm: 8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Heebo',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; max-width:480px; margin:0 auto; padding-bottom:80px; }
+
+  .header { background:linear-gradient(135deg,#0f172a,#1e3a5f); padding:18px 20px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+  .header h1 { font-size:22px; font-weight:900; background:linear-gradient(135deg,#60a5fa,#818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .header p { font-size:12px; color:var(--text3); margin-top:2px; }
+
+  .tabs { display:flex; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:66px; z-index:99; }
+  .tab { flex:1; padding:10px 4px; text-align:center; font-size:11px; font-weight:600; color:var(--text3); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab-icon { font-size:17px; display:block; margin-bottom:2px; }
+
+  .page { display:none; padding:14px; }
+  .page.active { display:block; }
+
+  .card { background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); padding:14px; margin-bottom:12px; }
+  .card-title { font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; }
+
+  label { font-size:13px; color:var(--text2); margin-bottom:5px; display:block; font-weight:500; }
+  input[type="date"], input[type="time"], input[type="text"], select, textarea {
+    width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm);
+    padding:10px 12px; color:var(--text); font-family:'Heebo',sans-serif; font-size:14px; outline:none;
+    transition:border-color 0.2s; -webkit-appearance:none;
+  }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+  select option { background:var(--surface2); }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .form-group { margin-bottom:12px; }
+  textarea { resize:none; height:76px; }
+
+  .segment { display:flex; background:var(--surface2); border-radius:var(--radius-sm); padding:3px; gap:3px; }
+  .seg-btn { flex:1; padding:8px 4px; text-align:center; font-size:12px; font-weight:600; border-radius:6px; cursor:pointer; color:var(--text3); transition:all 0.2s; border:none; background:transparent; font-family:'Heebo',sans-serif; }
+  .seg-btn.active { background:var(--accent); color:white; box-shadow:0 2px 8px rgba(59,130,246,0.4); }
+
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:11px 18px; border-radius:var(--radius-sm); font-family:'Heebo',sans-serif; font-size:14px; font-weight:700; cursor:pointer; border:none; transition:all 0.2s; }
+  .btn-primary { background:var(--accent); color:white; width:100%; }
+  .btn-success { background:var(--green); color:white; width:100%; }
+  .btn-outline { background:transparent; color:var(--accent); border:1px solid var(--accent); width:100%; }
+  .btn-sm-danger { background:transparent; color:var(--red); border:1px solid var(--red); padding:5px 9px; font-size:12px; }
+  .btn-sm-edit { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:5px 9px; font-size:12px; }
+  .btn-sm-save { background:var(--green); color:white; padding:5px 9px; font-size:12px; }
+  .btn-wa { background:#25D366; color:white; padding:5px 9px; font-size:12px; }
+
+  .duration-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .dur-btn { padding:9px 4px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'Heebo',sans-serif; font-size:12px; font-weight:600; color:var(--text2); cursor:pointer; text-align:center; transition:all 0.2s; }
+  .dur-btn.active { background:rgba(59,130,246,0.2); border-color:var(--accent); color:var(--accent); }
+
+  .guard-pool { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .guard-chip { padding:7px 13px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; color:var(--text2); }
+  .guard-chip.selected { background:var(--accent); border-color:var(--accent); color:white; }
+
+  .slot-display { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .slot-box { flex:1; min-width:70px; padding:8px 10px; border-radius:8px; text-align:center; border:1px solid var(--border); background:var(--surface2); }
+  .slot-box.filled { background:rgba(59,130,246,0.12); border-color:rgba(59,130,246,0.4); }
+  .slot-label { font-size:10px; color:var(--text3); margin-bottom:3px; }
+  .slot-name { font-size:12px; font-weight:700; color:var(--text3); }
+  .slot-box.filled .slot-name { color:#93c5fd; }
+  .slot-remove { font-size:10px; color:var(--red); margin-top:3px; cursor:pointer; }
+
+  .shift-card { background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); padding:13px; margin-bottom:10px; position:relative; overflow:hidden; }
+  .shift-card::before { content:''; position:absolute; right:0; top:0; bottom:0; width:3px; background:var(--accent); }
+  .shift-card.night::before { background:var(--accent2); }
+  .shift-card.past-card { opacity:0.65; }
+  .shift-meta { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+  .shift-time { font-size:18px; font-weight:800; }
+  .shift-date { font-size:11px; color:var(--text3); margin-top:1px; }
+  .shift-badge { font-size:11px; font-weight:700; padding:3px 8px; border-radius:10px; background:var(--surface3); color:var(--text2); }
+  .shift-guards { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+  .guard-tag { font-size:12px; padding:3px 10px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); border-radius:10px; color:#93c5fd; font-weight:600; }
+  .guard-tag.empty { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:#fca5a5; }
+  .shift-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .stat-box { background:var(--surface2); border-radius:var(--radius-sm); padding:14px; text-align:center; }
+  .stat-num { font-size:28px; font-weight:900; color:var(--accent); }
+  .stat-label { font-size:11px; color:var(--text3); margin-top:2px; font-weight:600; }
+  .guard-stat-row { display:flex; align-items:center; padding:10px 12px; background:var(--surface2); border-radius:var(--radius-sm); margin-bottom:6px; gap:10px; }
+  .guard-stat-name { font-size:13px; font-weight:600; min-width:70px; }
+  .bar-wrap { flex:1; height:6px; background:var(--surface3); border-radius:3px; overflow:hidden; }
+  .bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:3px; }
+  .guard-stat-hours { font-size:13px; font-weight:700; color:var(--accent); background:rgba(59,130,246,0.1); padding:3px 10px; border-radius:10px; white-space:nowrap; }
+
+  .guard-list-item { display:flex; align-items:center; padding:10px 12px; background:var(--surface2); border-radius:var(--radius-sm); margin-bottom:6px; gap:8px; }
+  .guard-avatar { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex-shrink:0; }
+
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:flex-end; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border-radius:20px 20px 0 0; padding:20px; width:100%; max-height:90vh; overflow-y:auto; animation:slideUp 0.25s ease; }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .modal-handle { width:40px; height:4px; background:var(--surface3); border-radius:2px; margin:0 auto 16px; }
+  .modal-title { font-size:18px; font-weight:800; margin-bottom:16px; }
+
+  .empty-state { text-align:center; padding:36px 20px; color:var(--text3); }
+  .empty-icon { font-size:44px; margin-bottom:10px; }
+  .empty-text { font-size:14px; }
+
+  .toast { position:fixed; bottom:88px; left:50%; transform:translateX(-50%) translateY(16px); background:var(--green); color:white; padding:10px 20px; border-radius:20px; font-size:13px; font-weight:700; opacity:0; transition:all 0.25s; z-index:2000; white-space:nowrap; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .section-label { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; margin:14px 0 8px; }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator { filter:invert(1) opacity(0.5); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🛡️ ניהול שמירות</h1>
+  <p id="headerDate"></p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('schedule')"><span class="tab-icon">📅</span>שיבוץ</div>
+  <div class="tab" onclick="switchTab('shifts')"><span class="tab-icon">📋</span>משמרות</div>
+  <div class="tab" onclick="switchTab('guards')"><span class="tab-icon">👥</span>שומרים</div>
+  <div class="tab" onclick="switchTab('stats')"><span class="tab-icon">📊</span>סטטיסטיקה</div>
+</div>
+
+<!-- SCHEDULE -->
+<div class="page active" id="page-schedule">
+  <div class="card">
+    <div class="card-title">⏰ פרטי משמרת</div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0"><label>תאריך</label><input type="date" id="shiftDate"></div>
+      <div class="form-group" style="margin:0"><label>שעת התחלה</label><input type="time" id="shiftTime"></div>
+    </div>
+    <div class="form-group" style="margin:0">
+      <label>משך המשמרת</label>
+      <div class="duration-grid">
+        <div class="dur-btn active" data-dur="30" onclick="selectDuration(this)">30 דק'</div>
+        <div class="dur-btn" data-dur="60" onclick="selectDuration(this)">שעה</div>
+        <div class="dur-btn" data-dur="90" onclick="selectDuration(this)">שעה וחצי</div>
+        <div class="dur-btn" data-dur="120" onclick="selectDuration(this)">שעתיים</div>
+        <div class="dur-btn" data-dur="180" onclick="selectDuration(this)">3 שעות</div>
+        <div class="dur-btn" data-dur="240" onclick="selectDuration(this)">4 שעות</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">👮 מספר שומרים</div>
+    <div class="segment" id="slotSegment">
+      <button class="seg-btn active" data-val="1" onclick="selectSlots(this)">1 שומר</button>
+      <button class="seg-btn" data-val="2" onclick="selectSlots(this)">2 שומרים</button>
+      <button class="seg-btn" data-val="3" onclick="selectSlots(this)">3 שומרים</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🙋 שיבוץ שומרים</div>
+    <div class="slot-display" id="slotDisplay"></div>
+    <div class="section-label">לחץ לשיבוץ</div>
+    <div class="guard-pool" id="guardPool"></div>
+  </div>
+  <button class="btn btn-primary" onclick="saveShift()">💾 שמור משמרת</button>
+</div>
+
+<!-- SHIFTS -->
+<div class="page" id="page-shifts">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="font-size:16px;font-weight:800">משמרות</div>
+    <div id="shiftCount" style="font-size:12px;color:var(--text3)"></div>
+  </div>
+  <div class="segment" style="margin-bottom:12px" id="filterSeg">
+    <button class="seg-btn active" onclick="setFilter(this,'future')">⏩ עתידיות</button>
+    <button class="seg-btn" onclick="setFilter(this,'past')">⏮ עבר</button>
+    <button class="seg-btn" onclick="setFilter(this,'all')">📋 הכל</button>
+  </div>
+  <div id="shiftsList"></div>
+</div>
+
+<!-- GUARDS -->
+<div class="page" id="page-guards">
+  <div class="card">
+    <div class="card-title">➕ הוספת שומרים</div>
+    <div class="form-group">
+      <label>שמות מופרדים בפסיק</label>
+      <textarea id="guardInput" placeholder="ישראל ישראלי, דוד כהן, רחל לוי..."></textarea>
+    </div>
+    <button class="btn btn-outline" style="margin-bottom:10px" onclick="previewGuards()">🔍 תצוגה מקדימה</button>
+    <div id="pendingPreview" style="margin-bottom:10px"></div>
+    <button class="btn btn-success" id="addGuardsBtn" style="display:none" onclick="commitGuards()">➕ הוסף לרשימה</button>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="font-size:14px;font-weight:700">שומרים רשומים</div>
+    <div id="guardCountLabel" style="font-size:12px;color:var(--text3)"></div>
+  </div>
+  <div id="guardListContainer"></div>
+</div>
+
+<!-- STATS -->
+<div class="page" id="page-stats">
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-num" id="statShifts">0</div><div class="stat-label">סה"כ משמרות</div></div>
+    <div class="stat-box"><div class="stat-num" id="statHours">0</div><div class="stat-label">סה"כ שעות</div></div>
+    <div class="stat-box"><div class="stat-num" id="statGuards">0</div><div class="stat-label">שומרים פעילים</div></div>
+    <div class="stat-box"><div class="stat-num" id="statAvg">0</div><div class="stat-label">ממוצע לשומר</div></div>
+  </div>
+  <div class="section-label">שעות לפי שומר</div>
+  <div id="guardStatsContainer"></div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" style="padding:24px">
+    <div class="modal-handle"></div>
+    <div id="confirmMsg" style="font-size:16px;font-weight:700;text-align:center;margin-bottom:20px"></div>
+    <button class="btn btn-sm-danger" id="confirmOkBtn" style="width:100%;padding:12px;font-size:14px;margin-bottom:8px">אישור מחיקה</button>
+    <button class="btn" style="background:var(--surface2);color:var(--text2);width:100%;padding:12px" onclick="closeConfirm()">ביטול</button>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ עריכת משמרת</div>
+    <input type="hidden" id="editId">
+    <div class="form-row">
+      <div class="form-group" style="margin:0"><label>תאריך</label><input type="date" id="editDate"></div>
+      <div class="form-group" style="margin:0"><label>שעה</label><input type="time" id="editTime"></div>
+    </div>
+    <div class="form-group">
+      <label>משך</label>
+      <select id="editDur">
+        <option value="30">30 דקות</option><option value="60">שעה</option>
+        <option value="90">שעה וחצי</option><option value="120">שעתיים</option>
+        <option value="180">3 שעות</option><option value="240">4 שעות</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>שומרים (מופרדים בפסיק)</label>
+      <input type="text" id="editGuards" placeholder="שם1, שם2...">
+    </div>
+    <button class="btn btn-primary" onclick="saveEdit()" style="margin-top:6px">💾 שמור שינויים</button>
+    <button class="btn" style="background:var(--surface2);color:var(--text2);width:100%;margin-top:8px" onclick="closeModal()">ביטול</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────────
+var guards       = JSON.parse(localStorage.getItem('guards') || '[]');
+var shifts       = JSON.parse(localStorage.getItem('shifts') || '[]');
+var selDuration  = 30;
+var selSlots     = 1;
+var selGuards    = [];
+var pendingGuards = [];
+var shiftFilter  = 'future';
+shifts = shifts.filter(function(s){ return s && s.date && s.time && s.duration; });
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+document.getElementById('headerDate').textContent =
+  new Date().toLocaleDateString('he-IL', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+document.getElementById('shiftDate').value = new Date().toISOString().split('T')[0];
+document.getElementById('shiftTime').value = '08:00';
+renderSlotDisplay();
+renderGuardPool();
+renderGuardList();
+renderShifts();
+renderStats();
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  var names = ['schedule','shifts','guards','stats'];
+  document.querySelectorAll('.tab').forEach(function(t,i){ t.classList.toggle('active', names[i]===name); });
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('page-'+name).classList.add('active');
+  if (name==='shifts') renderShifts();
+  if (name==='stats') renderStats();
+}
+
+// ── DURATION ──────────────────────────────────────────────────────────────────
+function selectDuration(el) {
+  document.querySelectorAll('.dur-btn').forEach(function(b){ b.classList.remove('active'); });
+  el.classList.add('active');
+  selDuration = parseInt(el.dataset.dur);
+}
+
+// ── SLOTS ─────────────────────────────────────────────────────────────────────
+function selectSlots(el) {
+  document.querySelectorAll('#slotSegment .seg-btn').forEach(function(b){ b.classList.remove('active'); });
+  el.classList.add('active');
+  selSlots = parseInt(el.dataset.val);
+  selGuards = selGuards.slice(0, selSlots);
+  renderSlotDisplay();
+}
+
+function renderSlotDisplay() {
+  var html = '';
+  for (var i=0; i<selSlots; i++) {
+    var g = selGuards[i] || '';
+    html += '<div class="slot-box '+(g?'filled':'')+'">'+
+      '<div class="slot-label">עמדה '+(i+1)+'</div>'+
+      '<div class="slot-name">'+(g||'פנוי')+'</div>'+
+      (g ? '<div class="slot-remove" onclick="removeSlot('+i+')">✕ הסר</div>' : '')+
+    '</div>';
+  }
+  document.getElementById('slotDisplay').innerHTML = html;
+  renderGuardPool();
+}
+
+function removeSlot(i) {
+  selGuards.splice(i, 1);
+  renderSlotDisplay();
+}
+
+// ── GUARD POOL ────────────────────────────────────────────────────────────────
+function renderGuardPool() {
+  var pool = document.getElementById('guardPool');
+  if (!guards.length) {
+    pool.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:8px 0">אין שומרים — הוסף בלשונית שומרים</div>';
+    return;
+  }
+  pool.innerHTML = guards.map(function(g) {
+    var sel = selGuards.indexOf(g) !== -1;
+    return '<div class="guard-chip'+(sel?' selected':'')+'" onclick="toggleGuard(this)" data-name="'+escAttr(g)+'">'+g+'</div>';
+  }).join('');
+}
+
+function toggleGuard(el) {
+  var name = el.dataset.name;
+  var idx = selGuards.indexOf(name);
+  if (idx !== -1) {
+    selGuards.splice(idx, 1);
+  } else {
+    if (selGuards.length >= selSlots) { showToast('⚠️ כבר שובצו '+selSlots+' שומרים'); return; }
+    selGuards.push(name);
+  }
+  renderSlotDisplay();
+}
+
+// ── SAVE SHIFT ────────────────────────────────────────────────────────────────
+function saveShift() {
+  var date = document.getElementById('shiftDate').value;
+  var time = document.getElementById('shiftTime').value;
+  if (!date || !time) { showToast('⚠️ יש למלא תאריך ושעה'); return; }
+  shifts.push({id: Date.now(), date: date, time: time, duration: selDuration, slots: selSlots, guards: selGuards.slice()});
+  saveData();
+  showToast('✅ משמרת נשמרה!');
+  document.getElementById('shiftTime').value = calcEndTime(time, selDuration);
+  selGuards = [];
+  renderSlotDisplay();
+}
+
+// ── SHIFTS LIST ───────────────────────────────────────────────────────────────
+function setFilter(el, f) {
+  shiftFilter = f;
+  document.querySelectorAll('#filterSeg .seg-btn').forEach(function(b){ b.classList.remove('active'); });
+  el.classList.add('active');
+  renderShifts();
+}
+
+function isPast(s) {
+  if (!s || !s.date || !s.time) return false;
+  var now = new Date();
+  var todayStr = now.toISOString().split('T')[0];
+  var nowMins = now.getHours()*60 + now.getMinutes();
+  if (s.date < todayStr) return true;
+  if (s.date > todayStr) return false;
+  var parts = s.time.split(':');
+  var startMins = parseInt(parts[0])*60 + parseInt(parts[1]);
+  return (startMins + s.duration) <= nowMins;
+}
+
+function renderShifts() {
+  var list = shifts.slice();
+  if (shiftFilter === 'future') list = list.filter(function(s){ return !isPast(s); });
+  if (shiftFilter === 'past')   list = list.filter(function(s){ return  isPast(s); });
+
+  list.sort(function(a,b){
+    var cmp = (a.date+a.time).localeCompare(b.date+b.time);
+    return shiftFilter === 'past' ? -cmp : cmp;
+  });
+
+  document.getElementById('shiftCount').textContent = list.length + ' משמרות';
+
+  if (!list.length) {
+    var msg = shiftFilter==='future' ? 'אין משמרות עתידיות' : shiftFilter==='past' ? 'אין משמרות עבר' : 'אין משמרות';
+    document.getElementById('shiftsList').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">🗓️</div><div class="empty-text">'+msg+'</div></div>';
+    return;
+  }
+
+  document.getElementById('shiftsList').innerHTML = list.map(function(s) {
+    var past    = isPast(s);
+    var dateStr = new Date(s.date+'T00:00:00').toLocaleDateString('he-IL',{weekday:'short',day:'numeric',month:'short'});
+    var endT    = calcEndTime(s.time, s.duration);
+    var hr      = parseInt(s.time.split(':')[0]);
+    var night   = hr >= 20 || hr < 6;
+    var tags    = '';
+    for (var i=0; i<s.slots; i++) {
+      var g = s.guards[i] || '';
+      tags += '<span class="guard-tag'+(g?'':' empty')+'">'+(g||'פנוי')+'</span>';
+    }
+    return '<div class="shift-card'+(night?' night':'')+(past?' past-card':'')+'">'+
+      '<div class="shift-meta">'+
+        '<div>'+
+          '<div class="shift-time">'+s.time+' – '+endT+'</div>'+
+          '<div class="shift-date">'+dateStr+' · '+fmtDur(s.duration)+(past?' · ✓ עבר':'')+'</div>'+
+        '</div>'+
+        '<div class="shift-badge">'+s.slots+' עמדות</div>'+
+      '</div>'+
+      '<div class="shift-guards">'+tags+'</div>'+
+      '<div class="shift-actions">'+
+        '<button class="btn btn-sm-edit" onclick="openEdit('+s.id+')">✏️ ערוך</button>'+
+        '<button class="btn btn-sm-danger" onclick="deleteShift('+s.id+')">🗑️</button>'+
+        '<button class="btn btn-wa" onclick="sendWA('+s.id+')">📲 וואטסאפ</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function deleteShift(id) {
+  id = parseInt(id);
+  showConfirm('🗑️ למחוק את המשמרת?', function() {
+    shifts = shifts.filter(function(s){ return s.id !== id; });
+    saveData(); renderShifts();
+    showToast('🗑️ משמרת נמחקה');
+  });
+}
+
+// ── EDIT MODAL ────────────────────────────────────────────────────────────────
+function openEdit(id) {
+  var s = null;
+  for (var i=0; i<shifts.length; i++) if (shifts[i].id===id) { s=shifts[i]; break; }
+  if (!s) return;
+  document.getElementById('editId').value      = id;
+  document.getElementById('editDate').value    = s.date;
+  document.getElementById('editTime').value    = s.time;
+  document.getElementById('editDur').value     = s.duration;
+  document.getElementById('editGuards').value  = (s.guards||[]).filter(Boolean).join(', ');
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+function saveEdit() {
+  var id  = parseInt(document.getElementById('editId').value);
+  var idx = -1;
+  for (var i=0; i<shifts.length; i++) if (shifts[i].id===id) { idx=i; break; }
+  if (idx===-1) return;
+  var g = document.getElementById('editGuards').value.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  shifts[idx] = {
+    id: id,
+    date:     document.getElementById('editDate').value,
+    time:     document.getElementById('editTime').value,
+    duration: parseInt(document.getElementById('editDur').value),
+    slots:    shifts[idx].slots,
+    guards:   g
+  };
+  saveData(); closeModal(); renderShifts();
+  showToast('✅ משמרת עודכנה!');
+}
+
+document.getElementById('editModal').addEventListener('click', function(e){
+  if (e.target === this) closeModal();
+});
+
+// ── WHATSAPP ──────────────────────────────────────────────────────────────────
+function sendWA(id) {
+  var s = null;
+  for (var i=0; i<shifts.length; i++) if (shifts[i].id===id) { s=shifts[i]; break; }
+  if (!s) return;
+  var dateStr = new Date(s.date+'T00:00:00').toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'});
+  var gl = (s.guards||[]).filter(Boolean).join(', ') || 'לא שובצו שומרים';
+  var msg = '🛡️ *משמרת שמירה*\n📅 '+dateStr+'\n⏰ '+s.time+' – '+calcEndTime(s.time,s.duration)+' ('+fmtDur(s.duration)+')\n👮 שומרים: '+gl+'\n_נשלח ממערכת ניהול שמירות_';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+// ── GUARDS PAGE ───────────────────────────────────────────────────────────────
+function previewGuards() {
+  var raw = document.getElementById('guardInput').value;
+  var names = raw.split(',').map(function(n){ return n.trim(); }).filter(Boolean);
+  if (!names.length) { showToast('⚠️ הכנס שמות'); return; }
+  var dupes = names.filter(function(n){ return guards.indexOf(n)!==-1; });
+  pendingGuards = names.filter(function(n){ return guards.indexOf(n)===-1; });
+  if (dupes.length) showToast('⚠️ כבר קיימים: '+dupes.join(', '));
+  renderPendingPreview();
+}
+
+function renderPendingPreview() {
+  var c = document.getElementById('pendingPreview');
+  var btn = document.getElementById('addGuardsBtn');
+  if (!pendingGuards.length) { c.innerHTML=''; btn.style.display='none'; return; }
+  btn.style.display = 'flex';
+  var chips = pendingGuards.map(function(g,i){
+    return '<div style="display:flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:16px;font-size:13px;font-weight:600;color:#6ee7b7">'+
+      g+'<span onclick="removePending('+i+')" style="cursor:pointer;color:#fca5a5;margin-right:2px">✕</span></div>';
+  }).join('');
+  c.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">תצוגה מקדימה – '+pendingGuards.length+' שומרים חדשים</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px">'+chips+'</div>';
+}
+
+function removePending(i) {
+  pendingGuards.splice(i,1);
+  renderPendingPreview();
+}
+
+function commitGuards() {
+  if (!pendingGuards.length) { showToast('⚠️ אין שומרים'); return; }
+  pendingGuards.forEach(function(n){ if (guards.indexOf(n)===-1) guards.push(n); });
+  var added = pendingGuards.length;
+  pendingGuards = [];
+  saveData();
+  document.getElementById('guardInput').value = '';
+  document.getElementById('pendingPreview').innerHTML = '';
+  document.getElementById('addGuardsBtn').style.display = 'none';
+  renderGuardList(); renderGuardPool();
+  showToast('✅ נוספו '+added+' שומרים');
+}
+
+function renderGuardList() {
+  var c = document.getElementById('guardListContainer');
+  document.getElementById('guardCountLabel').textContent = guards.length+' שומרים';
+  if (!guards.length) {
+    c.innerHTML='<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">אין שומרים ברשימה</div></div>';
+    return;
+  }
+  c.innerHTML = guards.map(function(g,idx){
+    return '<div class="guard-list-item">'+
+      '<div class="guard-avatar">'+g.charAt(0)+'</div>'+
+      '<div id="gn'+idx+'" style="flex:1;font-size:14px;font-weight:600">'+g+'</div>'+
+      '<input id="ge'+idx+'" type="text" value="'+escAttr(g)+'" style="display:none;flex:1;padding:5px 8px;font-size:13px" onkeydown="if(event.key===\'Enter\')saveGuardName('+idx+')">'+
+      '<div style="display:flex;gap:5px;flex-shrink:0">'+
+        '<button id="geb'+idx+'" class="btn btn-sm-edit" onclick="startEdit('+idx+')">✏️</button>'+
+        '<button id="gsb'+idx+'" class="btn btn-sm-save" style="display:none" onclick="saveGuardName('+idx+')">✓</button>'+
+        '<button class="btn btn-sm-danger" onclick="removeGuard('+idx+')">✕</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function startEdit(idx) {
+  document.getElementById('gn'+idx).style.display  = 'none';
+  document.getElementById('ge'+idx).style.display  = 'block';
+  document.getElementById('geb'+idx).style.display = 'none';
+  document.getElementById('gsb'+idx).style.display = 'inline-flex';
+  document.getElementById('ge'+idx).focus();
+}
+
+function saveGuardName(idx) {
+  var newName = document.getElementById('ge'+idx).value.trim();
+  if (!newName) { showToast('⚠️ שם ריק'); return; }
+  var old = guards[idx];
+  if (newName===old) { renderGuardList(); return; }
+  if (guards.indexOf(newName)!==-1) { showToast('⚠️ שם כבר קיים'); return; }
+  shifts.forEach(function(s){ s.guards=(s.guards||[]).map(function(g){ return g===old?newName:g; }); });
+  guards[idx] = newName;
+  saveData(); renderGuardList(); renderGuardPool();
+  showToast('✅ עודכן ל-'+newName);
+}
+
+function removeGuard(idx) {
+  var name = guards[idx];
+  showConfirm('🗑️ להסיר את ' + name + '?', function() {
+    guards.splice(idx,1);
+    saveData(); renderGuardList(); renderGuardPool();
+    showToast('🗑️ '+name+' הוסר');
+  });
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function renderStats() {
+  var totalMin = shifts.reduce(function(s,x){ return s+x.duration; },0);
+  var totalHrs = Math.round(totalMin/60*10)/10;
+  var gh = {};
+  shifts.forEach(function(s){ (s.guards||[]).forEach(function(g){ if(g) gh[g]=(gh[g]||0)+s.duration; }); });
+  var active = Object.keys(gh).length;
+  var avg = active ? Math.round(totalHrs/active*10)/10 : 0;
+
+  document.getElementById('statShifts').textContent = shifts.length;
+  document.getElementById('statHours').textContent  = totalHrs;
+  document.getElementById('statGuards').textContent = active;
+  document.getElementById('statAvg').textContent    = avg;
+
+  var c = document.getElementById('guardStatsContainer');
+  if (!active) { c.innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">אין נתונים</div></div>'; return; }
+  var maxM = Math.max.apply(null, Object.keys(gh).map(function(k){ return gh[k]; }));
+  var sorted = Object.keys(gh).sort(function(a,b){ return gh[b]-gh[a]; });
+  c.innerHTML = sorted.map(function(name){
+    var mins = gh[name];
+    var hrs = Math.round(mins/60*10)/10;
+    var pct = Math.round(mins/maxM*100);
+    return '<div class="guard-stat-row">'+
+      '<div class="guard-stat-name">'+name+'</div>'+
+      '<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+
+      '<div class="guard-stat-hours">'+hrs+"ש'</div>"+
+    '</div>';
+  }).join('');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function calcEndTime(t, mins) {
+  if (!t || typeof t !== "string" || t.indexOf(":") === -1) return "??:??";
+  var parts = t.split(':');
+  var h = parseInt(parts[0]), m = parseInt(parts[1]);
+  var total = h*60 + m + mins;
+  return String(Math.floor(total/60)%24).padStart(2,'0')+':'+String(total%60).padStart(2,'0');
+}
+
+function fmtDur(min) {
+  if (min<60) return min+" דק'";
+  var h=Math.floor(min/60), m=min%60;
+  return h+(m?'.5':'')+' שע\'';
+}
+
+function saveData() {
+  localStorage.setItem('guards', JSON.stringify(guards));
+  localStorage.setItem('shifts', JSON.stringify(shifts));
+}
+
+function showConfirm(msg, onOk) {
+  document.getElementById('confirmMsg').textContent = msg;
+  document.getElementById('confirmOkBtn').onclick = function() {
+    closeConfirm();
+    onOk();
+  };
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmModal').classList.remove('open');
+}
+
+document.getElementById('confirmModal').addEventListener('click', function(e){
+  if (e.target === this) closeConfirm();
+});
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+function escAttr(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>
