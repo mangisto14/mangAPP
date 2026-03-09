@@ -1,1 +1,360 @@
 
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>אפליקציית שיבוץ שומרים</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .tab-btn { padding: 10px 20px; cursor: pointer; background: #eee; border: none; border-radius: 5px; font-weight: bold; }
+        .tab-btn.active { background: #007bff; color: white; }
+        .tab-content { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #28a745; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #218838; }
+        .guard-list { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; margin-top: 10px; }
+        .guard-item { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .guard-item input[type="checkbox"] { width: auto; }
+        .shift-card { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 10px; background: #fdfdfd; }
+        .delete-btn { background: #dc3545; }
+        .delete-btn:hover { background: #c82333; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: right; }
+        th { background: #f0f0f0; }
+    </style>
+</head>
+<body>
+
+    <h1>מערכת שיבוץ שומרים</h1>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('scheduling')">שיבוץ משמרות</button>
+        <button class="tab-btn" onclick="switchTab('shifts')">רשימת שמירות</button>
+        <button class="tab-btn" onclick="switchTab('guards')">ניהול שומרים</button>
+        <button class="tab-btn" onclick="switchTab('stats')">סטטיסטיקות</button>
+    </div>
+
+    <div id="scheduling" class="tab-content active">
+        <h2>שיבוץ חדש</h2>
+        <div class="form-group">
+            <label>תאריך:</label>
+            <input type="date" id="shiftDate">
+        </div>
+        <div class="form-group">
+            <label>שעה:</label>
+            <input type="time" id="shiftTime">
+        </div>
+        <div class="form-group">
+            <label>כמות שומרים נדרשת:</label>
+            <input type="number" id="requiredGuards" min="1" value="1" onchange="updateCheckboxes()">
+        </div>
+        <div class="form-group">
+            <label>חיפוש שומר:</label>
+            <input type="text" id="searchGuard" placeholder="חפש לפי שם..." oninput="renderGuardSelection()">
+        </div>
+        
+        <label>בחר שומרים (עד הכמות המותרת):</label>
+        <div class="guard-list" id="guardSelectionList"></div>
+
+        <h3>תצוגה מקדימה לשיבוץ הנוכחי:</h3>
+        <ul id="previewList"></ul>
+
+        <button onclick="saveShift()">שבץ משמרת</button>
+    </div>
+
+    <div id="shifts" class="tab-content">
+        <h2>משמרות שנקבעו</h2>
+        <div class="form-group">
+            <label>סינון לפי זמן:</label>
+            <select id="filterTime" onchange="renderShifts()">
+                <option value="all">הכל</option>
+                <option value="future">עתידי</option>
+                <option value="past">עבר</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>סינון לפי שם שומר:</label>
+            <input type="text" id="filterName" placeholder="הכנס שם שומר..." oninput="renderShifts()">
+        </div>
+
+        <button onclick="copyShifts()" style="background:#007bff; margin-bottom:10px;">העתק רשימה</button>
+        <button onclick="sendWhatsApp()" style="background:#25D366; margin-bottom:10px;">שלח בוואטסאפ</button>
+
+        <div id="shiftsListContainer"></div>
+    </div>
+
+    <div id="guards" class="tab-content">
+        <h2>הוספת שומרים</h2>
+        <div class="form-group">
+            <label>הכנס שמות (מופרדים בפסיק):</label>
+            <textarea id="newGuardsInput" rows="3" placeholder="לדוגמה: משה, דוד, אבי..."></textarea>
+        </div>
+        <button onclick="addGuards()">הוסף שומרים</button>
+
+        <h3>רשימת שומרים קיימת:</h3>
+        <ul id="existingGuardsList"></ul>
+    </div>
+
+    <div id="stats" class="tab-content">
+        <h2>מצב שיבוצים</h2>
+        <table id="statsTable">
+            <thead>
+                <tr>
+                    <th>שם השומר</th>
+                    <th>כמות משמרות ששובץ</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Data State
+        let guards = JSON.parse(localStorage.getItem('guards')) || [];
+        let shifts = JSON.parse(localStorage.getItem('shifts')) || [];
+        let selectedForCurrentShift = [];
+
+        // Core Functions
+        function saveData() {
+            localStorage.setItem('guards', JSON.stringify(guards));
+            localStorage.setItem('shifts', JSON.stringify(shifts));
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+
+            if(tabId === 'scheduling') renderGuardSelection();
+            if(tabId === 'shifts') renderShifts();
+            if(tabId === 'guards') renderExistingGuards();
+            if(tabId === 'stats') renderStats();
+        }
+
+        // --- טאב ניהול שומרים ---
+        function addGuards() {
+            const input = document.getElementById('newGuardsInput').value;
+            if (!input.trim()) return;
+            const newGuards = input.split(',').map(name => name.trim()).filter(name => name !== '');
+            
+            newGuards.forEach(name => {
+                if (!guards.includes(name)) guards.push(name);
+            });
+            
+            saveData();
+            document.getElementById('newGuardsInput').value = '';
+            renderExistingGuards();
+            alert('השומרים נוספו בהצלחה!');
+        }
+
+        function renderExistingGuards() {
+            const list = document.getElementById('existingGuardsList');
+            list.innerHTML = '';
+            guards.forEach((guard, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = `${guard} <button class="delete-btn" style="padding:2px 5px; margin-right:10px;" onclick="removeGuard(${index})">X</button>`;
+                list.appendChild(li);
+            });
+        }
+
+        function removeGuard(index) {
+            if(confirm('בטוח שברצונך למחוק שומר זה?')) {
+                guards.splice(index, 1);
+                saveData();
+                renderExistingGuards();
+            }
+        }
+
+        // --- טאב שיבוץ ---
+        function renderGuardSelection() {
+            const container = document.getElementById('guardSelectionList');
+            const searchTerm = document.getElementById('searchGuard').value.toLowerCase();
+            container.innerHTML = '';
+
+            const filteredGuards = guards.filter(g => g.toLowerCase().includes(searchTerm));
+            
+            filteredGuards.forEach(guard => {
+                const div = document.createElement('div');
+                div.className = 'guard-item';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = guard;
+                checkbox.checked = selectedForCurrentShift.includes(guard);
+                checkbox.onchange = (e) => handleCheckboxChange(e.target);
+
+                const label = document.createElement('label');
+                label.innerText = guard;
+
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                container.appendChild(div);
+            });
+            updateCheckboxes();
+        }
+
+        function handleCheckboxChange(cb) {
+            if (cb.checked) {
+                selectedForCurrentShift.push(cb.value);
+            } else {
+                selectedForCurrentShift = selectedForCurrentShift.filter(g => g !== cb.value);
+            }
+            updateCheckboxes();
+            renderPreview();
+        }
+
+        function updateCheckboxes() {
+            const maxAllowed = parseInt(document.getElementById('requiredGuards').value) || 1;
+            const checkboxes = document.querySelectorAll('#guardSelectionList input[type="checkbox"]');
+            
+            checkboxes.forEach(cb => {
+                if (!cb.checked && selectedForCurrentShift.length >= maxAllowed) {
+                    cb.disabled = true;
+                } else {
+                    cb.disabled = false;
+                }
+            });
+        }
+
+        function renderPreview() {
+            const preview = document.getElementById('previewList');
+            preview.innerHTML = '';
+            selectedForCurrentShift.forEach(guard => {
+                const li = document.createElement('li');
+                li.innerText = guard;
+                preview.appendChild(li);
+            });
+        }
+
+        function saveShift() {
+            const date = document.getElementById('shiftDate').value;
+            const time = document.getElementById('shiftTime').value;
+            const reqGuards = document.getElementById('requiredGuards').value;
+
+            if(!date || !time) {
+                alert('יש לבחור תאריך ושעה');
+                return;
+            }
+            if(selectedForCurrentShift.length === 0) {
+                alert('יש לבחור לפחות שומר אחד');
+                return;
+            }
+
+            shifts.push({
+                id: Date.now(),
+                date: date,
+                time: time,
+                reqGuards: reqGuards,
+                assigned: [...selectedForCurrentShift]
+            });
+
+            saveData();
+            
+            // איפוס טופס
+            selectedForCurrentShift = [];
+            document.getElementById('shiftDate').value = '';
+            document.getElementById('shiftTime').value = '';
+            renderGuardSelection();
+            renderPreview();
+            
+            alert('המשמרת שובצה בהצלחה!');
+        }
+
+        // --- טאב רשימת שמירות ---
+        function renderShifts() {
+            const container = document.getElementById('shiftsListContainer');
+            const filterTime = document.getElementById('filterTime').value;
+            const filterName = document.getElementById('filterName').value.toLowerCase();
+            container.innerHTML = '';
+
+            const today = new Date().toISOString().split('T')[0];
+
+            let filteredShifts = shifts.filter(shift => {
+                // סינון זמן
+                let timeMatch = true;
+                if (filterTime === 'future') timeMatch = shift.date >= today;
+                if (filterTime === 'past') timeMatch = shift.date < today;
+
+                // סינון שם
+                let nameMatch = shift.assigned.some(g => g.toLowerCase().includes(filterName));
+
+                return timeMatch && nameMatch;
+            });
+
+            // מיון לפי תאריך
+            filteredShifts.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            filteredShifts.forEach(shift => {
+                const div = document.createElement('div');
+                div.className = 'shift-card';
+                div.innerHTML = `
+                    <h3>תאריך: ${shift.date} | שעה: ${shift.time}</h3>
+                    <p><strong>שומרים:</strong> ${shift.assigned.join(', ')}</p>
+                    <button class="delete-btn" onclick="deleteShift(${shift.id})">מחק שיבוץ</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function deleteShift(id) {
+            if(confirm('בטוח שברצונך למחוק משמרת זו?')) {
+                shifts = shifts.filter(s => s.id !== id);
+                saveData();
+                renderShifts();
+            }
+        }
+
+        function generateShiftsText() {
+            if (shifts.length === 0) return "אין משמרות לשליחה.";
+            let text = "*סידור שמירות:*\n\n";
+            shifts.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(s => {
+                text += `🗓️ ${s.date} ⏰ ${s.time}\n🛡️ ${s.assigned.join(', ')}\n\n`;
+            });
+            return text;
+        }
+
+        function copyShifts() {
+            const text = generateShiftsText();
+            navigator.clipboard.writeText(text).then(() => {
+                alert('הרשימה הועתקה ללוח!');
+            });
+        }
+
+        function sendWhatsApp() {
+            const text = encodeURIComponent(generateShiftsText());
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+        }
+
+        // --- טאב סטטיסטיקות ---
+        function renderStats() {
+            const tbody = document.querySelector('#statsTable tbody');
+            tbody.innerHTML = '';
+            
+            let stats = {};
+            guards.forEach(g => stats[g] = 0);
+            
+            shifts.forEach(shift => {
+                shift.assigned.forEach(g => {
+                    if(stats[g] !== undefined) stats[g]++;
+                    else stats[g] = 1; // למקרה ששומר נמחק אבל עדיין מופיע בהיסטוריה
+                });
+            });
+
+            for (const [guard, count] of Object.entries(stats)) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${guard}</td><td>${count}</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // הפעלה ראשונית
+        renderExistingGuards();
+    </script>
+</body>
+</html>
