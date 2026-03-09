@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "description": "Guard Scheduling App",
   "main": "index.html",
-  "scripts": {
-    "start": "npx serve -s . -p $PORT"
-  },
+"scripts": {
+  "start": "npx serve . -p $PORT --single guard-scheduler.html"
+},
   "dependencies": {
     "serve": "^14.2.1"
   }
