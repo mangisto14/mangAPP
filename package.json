@@ -1,0 +1,12 @@
+{
+  "name": "mangapp",
+  "version": "1.0.0",
+  "description": "Guard Scheduling App",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve -s . -p $PORT"
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  }
+}
