@@ -161,22 +161,25 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
       </div>
 
       {/* Table */}
-      <div className="card p-0 rounded-xl" style={{ overflow: "hidden" }}>
+      <div className="card p-0 rounded-xl overflow-hidden">
         {loading ? (
           <p className="text-center text-text-dim py-6">טוען...</p>
         ) : rows.length === 0 ? (
           <p className="text-center text-text-dim py-6">אין רשומות</p>
         ) : (
           <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh" }}>
-            <table className="text-sm" style={{ minWidth: "520px", width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+            <table className="text-sm w-full" style={{ minWidth: "520px" }}>
               <thead>
-                <tr className="border-b border-bg-border bg-bg-base" style={{ position: "sticky", top: 0, zIndex: 10 }}>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">שם</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">סיבה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">תאריך</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">יציאה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">חזרה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">משך</th>
+                <tr>
+                  {["שם","סיבה","תאריך","יציאה","חזרה","משך"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap border-b border-bg-border bg-bg-base"
+                      style={{ position: "sticky", top: 0, zIndex: 10 }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
