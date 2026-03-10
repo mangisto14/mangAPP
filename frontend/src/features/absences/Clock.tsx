@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 function elapsed(leftAt: string) {
   const diff = Math.max(
     0,
-    Math.floor((Date.now() - new Date(leftAt).getTime()) / 1000)
+    Math.floor((Date.now() - new Date(leftAt.endsWith("Z") ? leftAt : leftAt + "Z").getTime()) / 1000)
   );
   const days = Math.floor(diff / 86400);
   const h = String(Math.floor((diff % 86400) / 3600)).padStart(2, "0");
