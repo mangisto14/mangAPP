@@ -161,16 +161,16 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
       </div>
 
       {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0 rounded-xl" style={{ overflow: "hidden" }}>
         {loading ? (
           <p className="text-center text-text-dim py-6">טוען...</p>
         ) : rows.length === 0 ? (
           <p className="text-center text-text-dim py-6">אין רשומות</p>
         ) : (
-          <div className="overflow-auto max-h-[60vh]">
-            <table className="text-sm" style={{ minWidth: "520px", width: "100%" }}>
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b border-bg-border bg-bg-base">
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh" }}>
+            <table className="text-sm" style={{ minWidth: "520px", width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+              <thead>
+                <tr className="border-b border-bg-border bg-bg-base" style={{ position: "sticky", top: 0, zIndex: 10 }}>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">שם</th>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">סיבה</th>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">תאריך</th>
