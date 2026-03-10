@@ -83,6 +83,17 @@ def init_db() -> None:
                 conn.execute(sql)
             except Exception:
                 pass
+        # One-time: set reason='חופשה' for open absences with no reason
+        migrated = conn.execute(
+            "SELECT value FROM settings WHERE key='migration_open_reason_set'"
+        ).fetchone()
+        if not migrated:
+            conn.execute(
+                "UPDATE absences SET reason='חופשה' WHERE returned_at IS NULL AND reason IS NULL"
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('migration_open_reason_set', '1')"
+            )
 
 
 init_db()
@@ -296,7 +307,7 @@ def delete_guard(guard_id: int):
 def list_shifts(filter: str = "all"):
     now = datetime.now()
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM shifts ORDER BY start_time").fetchall()
+        rows = conn.execute("SELECT * FROM shifts ORDER BY start_time DESC").fetchall()
     result = []
     for s in rows:
         end_dt = datetime.fromisoformat(s["end_time"])

@@ -15,13 +15,19 @@ function fmtDuration(min: number): string {
   return m > 0 ? `${h}ש' ${m}ד'` : `${h} שעות`;
 }
 
-function fmtDatetime(iso: string): string {
+function fmtDate(iso: string): string {
   try {
     const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
-    return d.toLocaleString("he-IL", {
-      day: "2-digit", month: "2-digit",
-      hour: "2-digit", minute: "2-digit",
-    });
+    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  } catch {
+    return iso;
+  }
+}
+
+function fmtTime(iso: string): string {
+  try {
+    const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
+    return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return iso;
   }
@@ -130,20 +136,24 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
           </a>
         </div>
         <div className="flex gap-2">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="input flex-1 text-sm"
-            placeholder="מתאריך"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="input flex-1 text-sm"
-            placeholder="עד תאריך"
-          />
+          <label className="flex-1 flex flex-col gap-1">
+            <span className="text-xs text-text-muted pr-1">מתאריך</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="input text-sm"
+            />
+          </label>
+          <label className="flex-1 flex flex-col gap-1">
+            <span className="text-xs text-text-muted pr-1">עד תאריך</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="input text-sm"
+            />
+          </label>
         </div>
       </div>
 
@@ -160,6 +170,7 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
                 <tr className="border-b border-bg-border bg-bg-base">
                   <th className="text-right px-3 py-2 font-semibold text-text-muted">שם</th>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted">סיבה</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted">תאריך</th>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted">יציאה</th>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted">חזרה</th>
                   <th className="text-right px-3 py-2 font-semibold text-text-muted">משך</th>
@@ -170,9 +181,10 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
                   <tr key={r.id} className="border-b border-bg-border/50 hover:bg-bg-base/50">
                     <td className="px-3 py-2 font-medium text-text">{r.name}</td>
                     <td className="px-3 py-2 text-text-muted">{r.reason || "—"}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtDatetime(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtDate(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtTime(r.left_at)}</td>
                     <td className="px-3 py-2 text-text-muted tabular-nums">
-                      {r.returned_at ? fmtDatetime(r.returned_at) : <span className="text-warning">בחוץ</span>}
+                      {r.returned_at ? fmtTime(r.returned_at) : <span className="text-warning">בחוץ</span>}
                     </td>
                     <td className="px-3 py-2 text-text-muted tabular-nums">
                       {r.duration_min != null ? fmtDuration(r.duration_min) : "—"}
