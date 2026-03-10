@@ -304,17 +304,28 @@ def delete_guard(guard_id: int):
 
 # ── Shifts ────────────────────────────────────────────────────────────────────
 @app.get("/api/shifts")
-def list_shifts(filter: str = "all"):
+def list_shifts(
+    filter: str = "all",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
     now = datetime.now()
+    from_dt = datetime.fromisoformat(date_from) if date_from else None
+    to_dt = datetime.fromisoformat(date_to + "T23:59:59") if date_to else None
     with get_conn() as conn:
         rows = conn.execute("SELECT * FROM shifts ORDER BY start_time DESC").fetchall()
     result = []
     for s in rows:
+        start_dt = datetime.fromisoformat(s["start_time"])
         end_dt = datetime.fromisoformat(s["end_time"])
         is_past = end_dt <= now
         if filter == "future" and is_past:
             continue
         if filter == "past" and not is_past:
+            continue
+        if from_dt and start_dt < from_dt:
+            continue
+        if to_dt and start_dt > to_dt:
             continue
         result.append({
             "id": s["id"],
