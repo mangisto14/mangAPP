@@ -164,29 +164,29 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
         ) : rows.length === 0 ? (
           <p className="text-center text-text-dim py-6">אין רשומות</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
+          <div className="overflow-auto max-h-[60vh]">
+            <table className="text-sm" style={{ minWidth: "520px", width: "100%" }}>
+              <thead className="sticky top-0 z-10">
                 <tr className="border-b border-bg-border bg-bg-base">
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">שם</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">סיבה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">תאריך</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">יציאה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">חזרה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">משך</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">שם</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">סיבה</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">תאריך</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">יציאה</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">חזרה</th>
+                  <th className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap">משך</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-bg-border/50 hover:bg-bg-base/50">
-                    <td className="px-3 py-2 font-medium text-text">{r.name}</td>
-                    <td className="px-3 py-2 text-text-muted">{r.reason || "—"}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtDate(r.left_at)}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtTime(r.left_at)}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">
+                    <td className="px-3 py-2 font-medium text-text whitespace-nowrap">{r.name}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.reason || "—"}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">{fmtDate(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">{fmtTime(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
                       {r.returned_at ? fmtTime(r.returned_at) : <span className="text-warning">בחוץ</span>}
                     </td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
                       {r.duration_min != null ? fmtDuration(r.duration_min) : "—"}
                     </td>
                   </tr>
