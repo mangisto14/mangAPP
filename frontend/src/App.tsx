@@ -3,9 +3,11 @@ import ShiftsTab from "./components/ShiftsTab";
 import AddShiftTab from "./components/AddShiftTab";
 import GuardsTab from "./components/GuardsTab";
 import StatsTab from "./components/StatsTab";
+import AbsencesTab from "./components/AbsencesTab";
 
 const TABS = [
   { id: "shifts", label: "📋 משמרות" },
+  { id: "absences", label: "🚪 יציאות" },
   { id: "add", label: "➕ הוסף" },
   { id: "guards", label: "👥 שומרים" },
   { id: "stats", label: "📊 סטטיסטיקה" },
@@ -48,6 +50,7 @@ export default function App() {
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 pt-5">
         {tab === "shifts" && <ShiftsTab />}
+        {tab === "absences" && <AbsencesTab />}
         {tab === "add" && <AddShiftTab onSaved={() => setTab("shifts")} />}
         {tab === "guards" && <GuardsTab />}
         {tab === "stats" && <StatsTab />}

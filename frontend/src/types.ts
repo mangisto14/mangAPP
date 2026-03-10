@@ -46,3 +46,11 @@ export interface StagedShift {
   end_time: string;
   names: string[];
 }
+
+export interface AbsenceStatus {
+  guard_id: number;
+  name: string;
+  is_out: boolean;
+  left_at: string | null;
+  absence_id: number | null;
+}

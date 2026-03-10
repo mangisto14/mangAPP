@@ -61,6 +61,14 @@ def init_db() -> None:
                 names      TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS absences (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                guard_id    INTEGER NOT NULL,
+                left_at     TEXT NOT NULL,
+                returned_at TEXT
+            )
+        """)
 
 
 init_db()
@@ -403,6 +411,94 @@ def get_whatsapp_url():
 @app.get("/api/config")
 def get_config():
     return {"overload_threshold": OVERLOAD_THRESHOLD}
+
+
+# ── Absences ──────────────────────────────────────────────────────────────────
+class AbsenceActionBody(BaseModel):
+    guard_id: int
+
+
+@app.get("/api/absences")
+def list_absences():
+    """Return all guards with their current absence status."""
+    with get_conn() as conn:
+        guards = conn.execute("SELECT * FROM guards ORDER BY name").fetchall()
+        open_absences = conn.execute(
+            "SELECT * FROM absences WHERE returned_at IS NULL"
+        ).fetchall()
+
+    open_map = {row["guard_id"]: row for row in open_absences}
+
+    result = []
+    for g in guards:
+        absence = open_map.get(g["id"])
+        result.append(
+            {
+                "guard_id": g["id"],
+                "name": g["name"],
+                "is_out": absence is not None,
+                "left_at": absence["left_at"] if absence else None,
+                "absence_id": absence["id"] if absence else None,
+            }
+        )
+    return result
+
+
+@app.post("/api/absences/leave", status_code=201)
+def mark_leave(body: AbsenceActionBody):
+    """Mark a guard as having left the base."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT id FROM absences WHERE guard_id = ? AND returned_at IS NULL",
+            (body.guard_id,),
+        ).fetchone()
+        if already:
+            raise HTTPException(400, "Guard is already out")
+        now = datetime.now().isoformat()
+        conn.execute(
+            "INSERT INTO absences (guard_id, left_at) VALUES (?, ?)",
+            (body.guard_id, now),
+        )
+    return {"ok": True}
+
+
+@app.post("/api/absences/return")
+def mark_return(body: AbsenceActionBody):
+    """Mark a guard as having returned to the base."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM absences WHERE guard_id = ? AND returned_at IS NULL",
+            (body.guard_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(400, "Guard is not marked as out")
+        conn.execute(
+            "UPDATE absences SET returned_at = ? WHERE id = ?",
+            (datetime.now().isoformat(), row["id"]),
+        )
+    return {"ok": True}
+
+
+@app.post("/api/absences/reset")
+def reset_absence(body: AbsenceActionBody):
+    """Reset the absence timer – close current absence and open a new one."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM absences WHERE guard_id = ? AND returned_at IS NULL",
+            (body.guard_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(400, "Guard is not marked as out")
+        now = datetime.now().isoformat()
+        conn.execute(
+            "UPDATE absences SET returned_at = ? WHERE id = ?",
+            (now, row["id"]),
+        )
+        conn.execute(
+            "INSERT INTO absences (guard_id, left_at) VALUES (?, ?)",
+            (body.guard_id, now),
+        )
+    return {"ok": True}
 
 
 # ── Serve built React app ─────────────────────────────────────────────────────
