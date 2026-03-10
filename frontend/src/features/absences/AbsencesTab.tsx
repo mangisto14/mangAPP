@@ -82,6 +82,24 @@ function ReasonSheet({
   );
 }
 
+// ── Floating Label Date Input ─────────────────────────────────────────────────
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative flex-1">
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input text-sm w-full pt-5 pb-1"
+      />
+      <span className={`absolute right-3 pointer-events-none transition-all duration-150 text-text-muted
+        ${value ? "top-1 text-[10px]" : "top-1/2 -translate-y-1/2 text-sm"}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 // ── History View ──────────────────────────────────────────────────────────────
 function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
   const [rows, setRows] = useState<AbsenceHistory[]>([]);
@@ -136,24 +154,8 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
           </a>
         </div>
         <div className="flex gap-2">
-          <label className="flex-1 flex flex-col gap-1">
-            <span className="text-xs text-text-muted pr-1">מתאריך</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="input text-sm"
-            />
-          </label>
-          <label className="flex-1 flex flex-col gap-1">
-            <span className="text-xs text-text-muted pr-1">עד תאריך</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="input text-sm"
-            />
-          </label>
+          <DateInput label="מתאריך" value={dateFrom} onChange={setDateFrom} />
+          <DateInput label="עד תאריך" value={dateTo} onChange={setDateTo} />
         </div>
       </div>
 
