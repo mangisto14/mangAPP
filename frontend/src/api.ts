@@ -52,20 +52,3 @@ export const getSuggest = (limit = 3) =>
 export const getWhatsapp = () =>
   req<{ url: string; text: string }>("/whatsapp");
 
-// Absences
-export const getAbsences = () => req<import("./types").AbsenceStatus[]>("/absences");
-export const markLeave = (guard_id: number) =>
-  req<{ ok: boolean }>("/absences/leave", {
-    method: "POST",
-    body: JSON.stringify({ guard_id }),
-  });
-export const markReturn = (guard_id: number) =>
-  req<{ ok: boolean }>("/absences/return", {
-    method: "POST",
-    body: JSON.stringify({ guard_id }),
-  });
-export const resetAbsence = (guard_id: number) =>
-  req<{ ok: boolean }>("/absences/reset", {
-    method: "POST",
-    body: JSON.stringify({ guard_id }),
-  });

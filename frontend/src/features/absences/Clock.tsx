@@ -1,0 +1,33 @@
+import { useEffect, useState } from "react";
+
+function elapsed(leftAt: string) {
+  const diff = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(leftAt).getTime()) / 1000)
+  );
+  const days = Math.floor(diff / 86400);
+  const h = String(Math.floor((diff % 86400) / 3600)).padStart(2, "0");
+  const m = String(Math.floor((diff % 3600) / 60)).padStart(2, "0");
+  const s = String(diff % 60).padStart(2, "0");
+  return { days, h, m, s };
+}
+
+export default function Clock({ leftAt }: { leftAt: string }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { days, h, m, s } = elapsed(leftAt);
+  return (
+    <span className="font-mono text-sm font-bold text-warning tabular-nums">
+      {days > 0 && (
+        <span className="text-xs font-semibold text-warning/80 ml-1">
+          {days}י׳{" "}
+        </span>
+      )}
+      {h}:{m}:{s}
+    </span>
+  );
+}

@@ -420,14 +420,18 @@ class AbsenceActionBody(BaseModel):
 
 @app.get("/api/absences")
 def list_absences():
-    """Return all guards with their current absence status."""
+    """Return all guards with their current absence status and exit count."""
     with get_conn() as conn:
         guards = conn.execute("SELECT * FROM guards ORDER BY name").fetchall()
         open_absences = conn.execute(
             "SELECT * FROM absences WHERE returned_at IS NULL"
         ).fetchall()
+        exit_counts = conn.execute(
+            "SELECT guard_id, COUNT(*) as cnt FROM absences GROUP BY guard_id"
+        ).fetchall()
 
     open_map = {row["guard_id"]: row for row in open_absences}
+    count_map = {row["guard_id"]: row["cnt"] for row in exit_counts}
 
     result = []
     for g in guards:
@@ -439,6 +443,7 @@ def list_absences():
                 "is_out": absence is not None,
                 "left_at": absence["left_at"] if absence else None,
                 "absence_id": absence["id"] if absence else None,
+                "total_exits": count_map.get(g["id"], 0),
             }
         )
     return result

@@ -1,30 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
-import type { AbsenceStatus } from "../types";
-import { getAbsences, markLeave, markReturn, resetAbsence } from "../api";
-
-function elapsed(leftAt: string): { days: number; h: string; m: string; s: string } {
-  const diff = Math.floor((Date.now() - new Date(leftAt).getTime()) / 1000);
-  const days = Math.floor(diff / 86400);
-  const h = String(Math.floor((diff % 86400) / 3600)).padStart(2, "0");
-  const m = String(Math.floor((diff % 3600) / 60)).padStart(2, "0");
-  const s = String(diff % 60).padStart(2, "0");
-  return { days, h, m, s };
-}
-
-function Clock({ leftAt }: { leftAt: string }) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const { days, h, m, s } = elapsed(leftAt);
-  return (
-    <span className="font-mono text-base font-bold text-warning tabular-nums">
-      {days > 0 && <span className="text-xs font-semibold text-warning/80 ml-1">{days}י׳ </span>}
-      {h}:{m}:{s}
-    </span>
-  );
-}
+import { useCallback, useEffect, useState } from "react";
+import Clock from "./Clock";
+import { getAbsences, markLeave, markReturn, resetAbsence } from "./api";
+import type { AbsenceStatus } from "./types";
 
 export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
@@ -42,9 +19,11 @@ export default function AbsencesTab() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  async function action(fn: () => Promise<unknown>, guardId: number) {
+  async function doAction(fn: () => Promise<unknown>, guardId: number) {
     setBusy(guardId);
     setError("");
     try {
@@ -67,44 +46,62 @@ export default function AbsencesTab() {
   return (
     <div className="space-y-5 fade-in">
       {error && (
-        <div className="card border-danger/40 bg-danger/10 text-danger text-sm">{error}</div>
+        <div className="card border-danger/40 bg-danger/10 text-danger text-sm">
+          {error}
+        </div>
       )}
 
-      {/* Outside */}
+      {/* ── מחוץ למסגרת ── */}
       <div className="card">
         <h2 className="font-bold text-base mb-3 flex items-center gap-2">
-          <span className="text-warning">🚪</span> מחוץ למסגרת
+          <span>🚪</span> מחוץ למסגרת
           {out.length > 0 && (
             <span className="bg-warning/20 text-warning text-xs font-bold px-2 py-0.5 rounded-full">
               {out.length}
             </span>
           )}
         </h2>
+
         {out.length === 0 ? (
-          <p className="text-text-dim text-sm text-center py-4">אין יוצאים כרגע</p>
+          <p className="text-text-dim text-sm text-center py-4">
+            אין יוצאים כרגע
+          </p>
         ) : (
           <ul className="space-y-3">
             {out.map((a) => (
               <li
                 key={a.guard_id}
-                className="flex items-center justify-between gap-2 bg-bg-base rounded-xl px-3 py-2.5 slide-in"
+                className="flex items-center justify-between gap-2 bg-bg-base rounded-xl px-3 py-3 slide-in"
               >
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-semibold text-text">{a.name}</span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-text truncate">
+                      {a.name}
+                    </span>
+                    {a.total_exits > 0 && (
+                      <span className="shrink-0 text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
+                        {a.total_exits} יציאות
+                      </span>
+                    )}
+                  </div>
                   {a.left_at && <Clock leftAt={a.left_at} />}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
                     className="btn-ghost text-xs px-2 py-1"
                     disabled={busy === a.guard_id}
-                    onClick={() => action(() => resetAbsence(a.guard_id), a.guard_id)}
+                    onClick={() =>
+                      doAction(() => resetAbsence(a.guard_id), a.guard_id)
+                    }
                   >
-                    🔄 אפס שעון
+                    🔄
                   </button>
                   <button
                     className="btn-primary text-xs px-3 py-1.5"
                     disabled={busy === a.guard_id}
-                    onClick={() => action(() => markReturn(a.guard_id), a.guard_id)}
+                    onClick={() =>
+                      doAction(() => markReturn(a.guard_id), a.guard_id)
+                    }
                   >
                     חזר ✅
                   </button>
@@ -115,13 +112,19 @@ export default function AbsencesTab() {
         )}
       </div>
 
-      {/* Inside */}
+      {/* ── במסגרת ── */}
       <div className="card">
         <h2 className="font-bold text-base mb-3 flex items-center gap-2">
-          <span className="text-success">🏠</span> במסגרת
+          <span>🏠</span> במסגרת
+          <span className="bg-success/20 text-success text-xs font-bold px-2 py-0.5 rounded-full">
+            {inside.length}
+          </span>
         </h2>
+
         {inside.length === 0 ? (
-          <p className="text-text-dim text-sm text-center py-4">אין שומרים במסגרת</p>
+          <p className="text-text-dim text-sm text-center py-4">
+            אין שומרים במסגרת
+          </p>
         ) : (
           <ul className="space-y-2">
             {inside.map((a) => (
@@ -129,11 +132,20 @@ export default function AbsencesTab() {
                 key={a.guard_id}
                 className="flex items-center justify-between gap-2 bg-bg-base rounded-xl px-3 py-2"
               >
-                <span className="font-medium text-text">{a.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-text">{a.name}</span>
+                  {a.total_exits > 0 && (
+                    <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
+                      {a.total_exits} יציאות
+                    </span>
+                  )}
+                </div>
                 <button
                   className="btn-danger text-xs px-3 py-1.5"
                   disabled={busy === a.guard_id}
-                  onClick={() => action(() => markLeave(a.guard_id), a.guard_id)}
+                  onClick={() =>
+                    doAction(() => markLeave(a.guard_id), a.guard_id)
+                  }
                 >
                   יצא 🚪
                 </button>
