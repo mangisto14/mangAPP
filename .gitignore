@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.env
+
+# Database
+*.db
+*.sqlite
+
+# Node
+frontend/node_modules/
+
+# Build output (keep dist for deployment)
+# frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

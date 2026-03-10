@@ -1,0 +1,10 @@
+{
+  "name": "mangapp",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npx serve -s frontend/dist -p $PORT"
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  }
+}
