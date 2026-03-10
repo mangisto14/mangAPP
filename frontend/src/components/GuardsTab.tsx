@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
-import { Trash2, Save, AlertTriangle, UserPlus } from "lucide-react";
+import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown } from "lucide-react";
 import { getGuards, addGuards, updateGuard, deleteGuard } from "../api";
 import type { Guard } from "../types";
+
+interface EditState {
+  name: string;
+  phone: string;
+  role: string;
+}
 
 export default function GuardsTab() {
   const [guards, setGuards] = useState<Guard[]>([]);
   const [loading, setLoading] = useState(true);
   const [addInput, setAddInput] = useState("");
-  const [editNames, setEditNames] = useState<Record<number, string>>({});
+  const [edits, setEdits] = useState<Record<number, EditState>>({});
+  const [expanded, setExpanded] = useState<number | null>(null);
   const [toast, setToast] = useState("");
 
   const load = async () => {
@@ -15,19 +22,23 @@ export default function GuardsTab() {
     try {
       const g = await getGuards();
       setGuards(g);
-      const names: Record<number, string> = {};
-      g.forEach((guard) => (names[guard.id] = guard.name));
-      setEditNames(names);
-    } catch (e) {
-      showToast(`שגיאה: ${(e as Error).message}`);
+      const e: Record<number, EditState> = {};
+      g.forEach((guard) => {
+        e[guard.id] = {
+          name: guard.name,
+          phone: guard.phone ?? "",
+          role: guard.role ?? "",
+        };
+      });
+      setEdits(e);
+    } catch (err) {
+      showToast(`שגיאה: ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -45,20 +56,20 @@ export default function GuardsTab() {
       showToast(msg || "הושלם");
       setAddInput("");
       load();
-    } catch (e) {
-      showToast(`שגיאה: ${(e as Error).message}`);
+    } catch (err) {
+      showToast(`שגיאה: ${(err as Error).message}`);
     }
   };
 
   const handleUpdate = async (id: number) => {
-    const name = editNames[id]?.trim();
-    if (!name) return;
+    const e = edits[id];
+    if (!e?.name.trim()) return;
     try {
-      await updateGuard(id, name);
-      showToast(`💾 ${name} עודכן`);
+      await updateGuard(id, e.name.trim(), e.phone || null, e.role || null);
+      showToast(`💾 ${e.name} עודכן`);
       load();
-    } catch (e) {
-      showToast(`שגיאה: ${(e as Error).message}`);
+    } catch (err) {
+      showToast(`שגיאה: ${(err as Error).message}`);
     }
   };
 
@@ -68,11 +79,13 @@ export default function GuardsTab() {
     load();
   };
 
+  const setField = (id: number, field: keyof EditState, value: string) =>
+    setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+
   const overloaded = guards.filter((g) => g.overloaded);
 
   return (
     <div className="fade-in space-y-4">
-      {/* Toast */}
       {toast && (
         <div className="fixed top-20 right-4 left-4 max-w-sm mx-auto z-50">
           <div className="card border-primary/40 bg-primary/10 text-text text-sm text-center font-medium slide-in">
@@ -81,7 +94,6 @@ export default function GuardsTab() {
         </div>
       )}
 
-      {/* ── Overload Alert ─────────────────────────────────────── */}
       {overloaded.length > 0 && (
         <div className="card border-warning/40 bg-warning/5 slide-in">
           <div className="flex items-start gap-2">
@@ -95,16 +107,12 @@ export default function GuardsTab() {
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-text-dim mt-2">
-                שומרים אלה משובץ ב-{overloaded[0]?.future}+ משמרות עתידיות.
-                מומלץ לשבץ שומרים אחרים.
-              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Add Guards ─────────────────────────────────────────── */}
+      {/* Add */}
       <div className="card space-y-3">
         <h2 className="font-bold text-text flex items-center gap-2">
           <UserPlus size={16} className="text-primary-light" />
@@ -118,82 +126,105 @@ export default function GuardsTab() {
             placeholder="ישראל ישראלי, משה כהן, ..."
             className="input flex-1"
           />
-          <button onClick={handleAdd} className="btn-primary px-5">
-            הוסף
-          </button>
+          <button onClick={handleAdd} className="btn-primary px-5">הוסף</button>
         </div>
         <p className="text-xs text-text-dim">ניתן להוסיף מספר שומרים, מופרדים בפסיק</p>
       </div>
 
-      {/* ── Guards List ────────────────────────────────────────── */}
-      <div className="card space-y-3">
-        <div className="flex items-center justify-between">
+      {/* List */}
+      <div className="card space-y-2">
+        <div className="flex items-center justify-between mb-1">
           <h2 className="font-bold text-text">רשימת שומרים</h2>
           <span className="text-xs text-text-dim bg-bg-base px-2 py-1 rounded-full">
             {guards.length} שומרים
           </span>
         </div>
 
-        {loading && (
-          <div className="text-center text-text-dim py-6">טוען...</div>
-        )}
-
+        {loading && <div className="text-center text-text-dim py-6">טוען...</div>}
         {!loading && guards.length === 0 && (
-          <div className="text-center text-text-dim py-6">
-            אין שומרים – הוסף למעלה
-          </div>
+          <div className="text-center text-text-dim py-6">אין שומרים – הוסף למעלה</div>
         )}
 
-        <div className="space-y-2 max-h-[420px] overflow-y-auto">
-          {guards.map((g) => (
-            <div
-              key={g.id}
-              className={`flex items-center gap-2 p-3 rounded-xl border transition-all
-                ${g.overloaded ? "border-warning/30 bg-warning/5" : "border-bg-border bg-bg-base"}`}
-            >
-              {/* Name input */}
-              <input
-                value={editNames[g.id] ?? g.name}
-                onChange={(e) =>
-                  setEditNames((prev) => ({ ...prev, [g.id]: e.target.value }))
-                }
-                onKeyDown={(e) => e.key === "Enter" && handleUpdate(g.id)}
-                className="input flex-1 text-sm py-1.5 h-8"
-              />
+        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+          {guards.map((g) => {
+            const e = edits[g.id];
+            const isOpen = expanded === g.id;
+            return (
+              <div
+                key={g.id}
+                className={`rounded-xl border transition-all
+                  ${g.overloaded ? "border-warning/30 bg-warning/5" : "border-bg-border bg-bg-base"}`}
+              >
+                {/* Main row */}
+                <div className="flex items-center gap-2 p-2.5">
+                  <input
+                    value={e?.name ?? g.name}
+                    onChange={(ev) => setField(g.id, "name", ev.target.value)}
+                    onKeyDown={(ev) => ev.key === "Enter" && handleUpdate(g.id)}
+                    className="input flex-1 text-sm py-1.5 h-8"
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    <span className="pill-past">✅ {g.past}</span>
+                    <span className="pill-future">🕐 {g.future}</span>
+                  </div>
+                  <button
+                    onClick={() => setExpanded(isOpen ? null : g.id)}
+                    className="p-1.5 text-text-dim hover:text-text rounded-lg hover:bg-bg-border transition-colors"
+                    title="פרטים נוספים"
+                  >
+                    <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  <button
+                    onClick={() => handleUpdate(g.id)}
+                    className="p-1.5 text-text-dim hover:text-success rounded-lg hover:bg-success/10 transition-colors"
+                  >
+                    <Save size={15} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(g)}
+                    className="p-1.5 text-text-dim hover:text-danger rounded-lg hover:bg-danger/10 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
 
-              {/* Stats */}
-              <div className="flex gap-1 flex-shrink-0">
-                <span className="pill-past">✅ {g.past}</span>
-                <span className="pill-future">🕐 {g.future}</span>
-                {g.overloaded && (
-                  <span className="overload-badge">
-                    <AlertTriangle size={10} />
-                    עמוס
-                  </span>
+                {/* Expanded: phone + role */}
+                {isOpen && (
+                  <div className="px-3 pb-3 space-y-2 border-t border-bg-border pt-2 slide-in">
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs text-text-dim block mb-1">טלפון</label>
+                        <input
+                          value={e?.phone ?? ""}
+                          onChange={(ev) => setField(g.id, "phone", ev.target.value)}
+                          placeholder="050-0000000"
+                          className="input text-sm py-1.5"
+                          type="tel"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-text-dim block mb-1">תפקיד</label>
+                        <input
+                          value={e?.role ?? ""}
+                          onChange={(ev) => setField(g.id, "role", ev.target.value)}
+                          placeholder="שומר / מפקד..."
+                          className="input text-sm py-1.5"
+                        />
+                      </div>
+                    </div>
+                    {e?.phone && (
+                      <a
+                        href={`tel:${e.phone}`}
+                        className="btn-ghost text-xs px-3 py-1.5 inline-flex items-center gap-1"
+                      >
+                        📞 חייג
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
-
-              {/* Save */}
-              <button
-                onClick={() => handleUpdate(g.id)}
-                title="שמור שם"
-                className="flex-shrink-0 text-text-dim hover:text-success transition-colors p-1.5
-                           rounded-lg hover:bg-success/10"
-              >
-                <Save size={15} />
-              </button>
-
-              {/* Delete */}
-              <button
-                onClick={() => handleDelete(g)}
-                title="מחק"
-                className="flex-shrink-0 text-text-dim hover:text-danger transition-colors p-1.5
-                           rounded-lg hover:bg-danger/10"
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

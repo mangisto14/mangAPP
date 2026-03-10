@@ -1,6 +1,8 @@
 export interface Guard {
   id: number;
   name: string;
+  phone: string | null;
+  role: string | null;
   past: number;
   future: number;
   total: number;

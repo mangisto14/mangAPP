@@ -24,10 +24,15 @@ export const addGuards = (names: string[]) =>
     method: "POST",
     body: JSON.stringify({ names }),
   });
-export const updateGuard = (id: number, name: string) =>
+export const updateGuard = (
+  id: number,
+  name: string,
+  phone?: string | null,
+  role?: string | null,
+) =>
   req<{ ok: boolean }>(`/guards/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, phone: phone ?? null, role: role ?? null }),
   });
 export const deleteGuard = (id: number) =>
   req<{ ok: boolean }>(`/guards/${id}`, { method: "DELETE" });

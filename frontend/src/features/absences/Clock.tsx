@@ -12,7 +12,7 @@ function elapsed(leftAt: string) {
   return { days, h, m, s };
 }
 
-export default function Clock({ leftAt }: { leftAt: string }) {
+export default function Clock({ leftAt, alert }: { leftAt: string; alert?: boolean }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -21,9 +21,9 @@ export default function Clock({ leftAt }: { leftAt: string }) {
 
   const { days, h, m, s } = elapsed(leftAt);
   return (
-    <span className="font-mono text-sm font-bold text-warning tabular-nums">
+    <span className={`font-mono text-sm font-bold tabular-nums ${alert ? "text-danger" : "text-warning"}`}>
       {days > 0 && (
-        <span className="text-xs font-semibold text-warning/80 ml-1">
+        <span className="text-xs font-semibold ml-1 opacity-80">
           {days}י׳{" "}
         </span>
       )}

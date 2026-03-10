@@ -1,0 +1,98 @@
+import { useState } from "react";
+
+const BASE = "/api";
+
+async function verifyPin(pin: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/pin/verify?pin=${pin}`);
+  if (!res.ok) return false;
+  const data = await res.json();
+  return data.ok;
+}
+
+export default function PinScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [digits, setDigits] = useState<string[]>([]);
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const append = async (d: string) => {
+    if (loading || digits.length >= 4) return;
+    const next = [...digits, d];
+    setDigits(next);
+    setError(false);
+
+    if (next.length === 4) {
+      setLoading(true);
+      const ok = await verifyPin(next.join(""));
+      setLoading(false);
+      if (ok) {
+        sessionStorage.setItem("pin_ok", "1");
+        onSuccess();
+      } else {
+        setShake(true);
+        setError(true);
+        setTimeout(() => {
+          setShake(false);
+          setDigits([]);
+        }, 600);
+      }
+    }
+  };
+
+  const del = () => {
+    if (loading) return;
+    setDigits((d) => d.slice(0, -1));
+    setError(false);
+  };
+
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
+
+  return (
+    <div className="fixed inset-0 bg-bg-deep flex flex-col items-center justify-center gap-8 px-6">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-text">מצבת כוח</h1>
+        <p className="text-text-dim text-sm mt-1">הזן קוד כניסה</p>
+      </div>
+
+      {/* Dots */}
+      <div className={`flex gap-4 ${shake ? "animate-shake" : ""}`}>
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`w-4 h-4 rounded-full border-2 transition-all duration-150
+              ${digits.length > i
+                ? error
+                  ? "bg-danger border-danger"
+                  : "bg-primary border-primary"
+                : "border-bg-border bg-transparent"
+              }`}
+          />
+        ))}
+      </div>
+
+      {error && (
+        <p className="text-danger text-sm font-medium -mt-4">קוד שגוי, נסה שוב</p>
+      )}
+
+      {/* Numpad */}
+      <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+        {keys.map((k, i) => (
+          <button
+            key={i}
+            disabled={loading || k === ""}
+            onClick={() => (k === "⌫" ? del() : k !== "" ? append(k) : undefined)}
+            className={`h-16 rounded-2xl text-xl font-semibold transition-all duration-100 active:scale-95
+              ${k === ""
+                ? "invisible"
+                : k === "⌫"
+                ? "bg-bg-card text-text-muted hover:bg-bg-border"
+                : "bg-bg-card text-text hover:bg-bg-border active:bg-primary/20"
+              }`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
