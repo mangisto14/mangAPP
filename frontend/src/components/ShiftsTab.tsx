@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trash2, MessageCircle } from "lucide-react";
+import { Trash2, MessageCircle, Copy, Check } from "lucide-react";
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
 
@@ -57,10 +57,20 @@ export default function ShiftsTab() {
     load();
   };
 
+  const [copied, setCopied] = useState(false);
+
   const handleWhatsApp = async () => {
     const { url } = await getWhatsapp();
     if (url) window.open(url, "_blank");
     else alert("אין משמרות עתידיות לשלוח");
+  };
+
+  const handleCopy = async () => {
+    const { text } = await getWhatsapp();
+    if (!text) { alert("אין משמרות עתידיות להעתיק"); return; }
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   // Group by date
@@ -96,14 +106,25 @@ export default function ShiftsTab() {
             </button>
           ))}
         </div>
-        <button
-          onClick={handleWhatsApp}
-          className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
-                     border border-success/30 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
-        >
-          <MessageCircle size={15} />
-          שלח
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 bg-bg-card hover:bg-bg-border text-text-muted
+                       border border-bg-border px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
+            title="העתק טקסט"
+          >
+            {copied ? <Check size={15} className="text-success" /> : <Copy size={15} />}
+            {copied ? "הועתק!" : "העתק"}
+          </button>
+          <button
+            onClick={handleWhatsApp}
+            className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
+                       border border-success/30 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
+          >
+            <MessageCircle size={15} />
+            שלח
+          </button>
+        </div>
       </div>
 
       {/* Content */}
