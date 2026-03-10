@@ -1,9 +1,10 @@
 {
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "buildCommand": "cd frontend && npm install && npm run build"
+  "name": "mangapp",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npx serve -s frontend/dist -p $PORT"
   },
-  "deploy": {
-    "startCommand": "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+  "dependencies": {
+    "serve": "^14.2.1"
   }
 }
