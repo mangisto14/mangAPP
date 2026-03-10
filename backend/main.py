@@ -506,6 +506,45 @@ def reset_absence(body: AbsenceActionBody):
     return {"ok": True}
 
 
+class SeedAbsenceItem(BaseModel):
+    name: str
+    left_at: str  # ISO format UTC
+
+
+class SeedAbsencesBody(BaseModel):
+    guards: list[SeedAbsenceItem]
+
+
+@app.post("/api/admin/seed-absences", status_code=201)
+def seed_absences(body: SeedAbsencesBody):
+    """Upsert guards and mark them as out since given UTC time (one-time use)."""
+    with get_conn() as conn:
+        for item in body.guards:
+            # upsert guard
+            existing = conn.execute(
+                "SELECT id FROM guards WHERE name = ?", (item.name,)
+            ).fetchone()
+            if existing:
+                guard_id = existing["id"]
+            else:
+                cur = conn.execute(
+                    "INSERT INTO guards (name) VALUES (?)", (item.name,)
+                )
+                guard_id = cur.lastrowid
+
+            # close any existing open absence
+            conn.execute(
+                "UPDATE absences SET returned_at = ? WHERE guard_id = ? AND returned_at IS NULL",
+                (item.left_at, guard_id),
+            )
+            # open new absence from given time
+            conn.execute(
+                "INSERT INTO absences (guard_id, left_at) VALUES (?, ?)",
+                (guard_id, item.left_at),
+            )
+    return {"ok": True, "count": len(body.guards)}
+
+
 # ── Serve built React app ─────────────────────────────────────────────────────
 _DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
