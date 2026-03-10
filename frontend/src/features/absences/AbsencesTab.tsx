@@ -6,6 +6,7 @@ import {
 } from "./api";
 import type { AbsenceStatus, AbsenceHistory, Settings } from "./types";
 
+
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
 
 function fmtDuration(min: number): string {
