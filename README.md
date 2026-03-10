@@ -8,20 +8,28 @@
 mangAPP/
 ├── backend/
 │   ├── __init__.py
-│   └── main.py          # FastAPI — כל ה-API endpoints
+│   └── main.py               # FastAPI — כל ה-API endpoints
 ├── frontend/
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── api.ts
-│   │   ├── types.ts
-│   │   └── components/
-│   │       ├── ShiftsTab.tsx   # רשימת משמרות
-│   │       ├── AddShiftTab.tsx # הוספה + המלצה
-│   │       ├── GuardsTab.tsx   # ניהול שומרים
-│   │       └── StatsTab.tsx    # סטטיסטיקה
-│   ├── dist/            # Build מוכן לפריסה
+│   ├── index.html             # נקודת כניסה HTML (RTL, Hebrew font)
 │   ├── package.json
-│   └── vite.config.ts
+│   ├── package-lock.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── tsconfig.json
+│   ├── dist/                  # Build מוכן לפריסה (נוצר ע"י npm run build)
+│   └── src/
+│       ├── main.tsx           # React entry point
+│       ├── App.tsx            # Tabs navigation
+│       ├── api.ts             # כל קריאות ה-API
+│       ├── types.ts           # TypeScript interfaces
+│       ├── index.css          # Tailwind + global styles
+│       └── components/
+│           ├── ShiftsTab.tsx  # רשימת משמרות + WhatsApp
+│           ├── AddShiftTab.tsx # הוספה + המלצה חכמה + אזהרת עומס
+│           ├── GuardsTab.tsx  # ניהול שומרים + התראת עומס יתר
+│           └── StatsTab.tsx   # סטטיסטיקה ודירוג
+├── .gitignore
 ├── requirements.txt
 ├── Procfile
 └── railway.json
