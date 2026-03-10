@@ -23,8 +23,8 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-bg-deep/90 backdrop-blur border-b border-bg-border">
         <div className="max-w-2xl mx-auto px-4 py-3">
-          <h1 className="text-lg font-bold text-text">🛡️ Smart Guard Manager</h1>
-          <p className="text-xs text-text-dim">ניהול משמרות חכם</p>
+          <h1 className="text-lg font-bold text-text">מצבת כוח</h1>
+          <p className="text-xs text-text-dim">ניהול מצבת כוח</p>
         </div>
       </header>
 
