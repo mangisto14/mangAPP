@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-import sqlite3, os, urllib.parse, csv, io
+from contextlib import contextmanager
+import os, urllib.parse, csv, io
 
 app = FastAPI(title="מצבת כוח API", version="3.0.0")
 
@@ -28,6 +29,51 @@ HE_DAY = {
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
+DATABASE_URL = os.getenv("DATABASE_URL")
+IS_PG = bool(DATABASE_URL)
+
+if IS_PG:
+    import psycopg2
+    import psycopg2.extras
+    import psycopg2.errors
+else:
+    import sqlite3
+
+
+def _q(sql: str) -> str:
+    """Replace ? placeholders with %s for PostgreSQL"""
+    if IS_PG:
+        return sql.replace("?", "%s")
+    return sql
+
+
+_IntegrityError = psycopg2.errors.UniqueViolation if IS_PG else sqlite3.IntegrityError  # type: ignore[name-defined]
+
+# Primary key column definition
+_SERIAL_PK = "id SERIAL PRIMARY KEY" if IS_PG else "id INTEGER PRIMARY KEY AUTOINCREMENT"
+
+
+class PgConn:
+    """Wraps psycopg2 connection to expose a sqlite3-compatible execute() interface"""
+
+    def __init__(self, raw):
+        self._raw = raw
+        self._cur = raw.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    def execute(self, sql, params=()):
+        self._cur.execute(sql, params if params else None)
+        return self._cur
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
+
+
 def db_path() -> str:
     volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
     if volume_path:
@@ -37,33 +83,46 @@ def db_path() -> str:
     return "guard_system.db"
 
 
-def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path())
-    conn.row_factory = sqlite3.Row
-    return conn
+@contextmanager
+def get_conn():
+    if IS_PG:
+        raw = psycopg2.connect(DATABASE_URL)
+        conn = PgConn(raw)
+    else:
+        raw = sqlite3.connect(db_path())
+        raw.row_factory = sqlite3.Row
+        conn = raw
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
     with get_conn() as conn:
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS guards (
-                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                {_SERIAL_PK},
                 name  TEXT UNIQUE NOT NULL,
                 phone TEXT,
                 role  TEXT
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS shifts (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                {_SERIAL_PK},
                 start_time TEXT NOT NULL,
                 end_time   TEXT NOT NULL,
                 names      TEXT NOT NULL
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS absences (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                {_SERIAL_PK},
                 guard_id    INTEGER NOT NULL,
                 left_at     TEXT NOT NULL,
                 returned_at TEXT,
@@ -74,6 +133,28 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
                 value TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rotation_config (
+                id           INTEGER PRIMARY KEY,
+                start_date   TEXT NOT NULL,
+                period_days  INTEGER NOT NULL DEFAULT 2
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rotation_roles (
+                {_SERIAL_PK},
+                name     TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rotation_slots (
+                {_SERIAL_PK},
+                role_id  INTEGER NOT NULL REFERENCES rotation_roles(id) ON DELETE CASCADE,
+                slot_num INTEGER NOT NULL,
+                names    TEXT NOT NULL DEFAULT '[]'
             )
         """)
         # Safe migrations for existing DBs
@@ -94,12 +175,80 @@ def init_db() -> None:
             conn.execute(
                 "UPDATE absences SET reason='חופשה' WHERE returned_at IS NULL AND reason IS NULL"
             )
-            conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('migration_open_reason_set', '1')"
-            )
+            if IS_PG:
+                conn.execute(
+                    "INSERT INTO settings (key, value) VALUES ('migration_open_reason_set', '1') ON CONFLICT (key) DO NOTHING"
+                )
+            else:
+                conn.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES ('migration_open_reason_set', '1')"
+                )
 
 
 init_db()
+
+
+# ── Seed Rotation ─────────────────────────────────────────────────────────────
+import json as _json
+
+_DEFAULT_ROTATION = {
+    "start_date": "2025-03-08",
+    "period_days": 2,
+    "roles": [
+        {"name": "קצינים",  "slots": [["זיו"], ["טל"], ["שלמה"]]},
+        {"name": "מפקדים", "slots": [["בועז"], ["יוסף"], ["אביתר"]]},
+        {"name": "פקחים",  "slots": [
+            ["שי", "בוחניק", "עוז", "חי"],
+            ["חן", "גיל", "ירין", "ביטון"],
+            ["דדון", "שלומי", "תלקר", "חי מגנזי"],
+        ]},
+        {"name": "נהגים",  "slots": [["גיל", "עוז"], ["ישראל", "רומן"], ["מתנאל", "נוני"]]},
+        {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["נדב", "לירן"], ["גל", "עמיר", "שלומי"]]},
+        {"name": "עתודאים", "slots": [
+            ["יהונתן קפיטל", "אור הדר", "אריאל קרליך"],
+            ["שי שני", "דוד סויסה", "יובל מועלם", "תומר שמאי"],
+            ["רועי נגאוקר", "טל ברוקר", "מתן קזז", "תומר שמאי"],
+        ]},
+    ],
+}
+
+
+def seed_rotation() -> None:
+    with get_conn() as conn:
+        existing = conn.execute("SELECT id FROM rotation_config").fetchone()
+        if existing:
+            return
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, %s, %s) ON CONFLICT (id) DO NOTHING",
+                (_DEFAULT_ROTATION["start_date"], _DEFAULT_ROTATION["period_days"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
+                (_DEFAULT_ROTATION["start_date"], _DEFAULT_ROTATION["period_days"]),
+            )
+        for pos, role_data in enumerate(_DEFAULT_ROTATION["roles"]):
+            if IS_PG:
+                cur = conn.execute(
+                    "INSERT INTO rotation_roles (name, position) VALUES (%s, %s) RETURNING id",
+                    (role_data["name"], pos),
+                )
+                role_id = cur.fetchone()["id"]
+            else:
+                cur = conn.execute(
+                    "INSERT INTO rotation_roles (name, position) VALUES (?, ?)",
+                    (role_data["name"], pos),
+                )
+                role_id = cur.lastrowid
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                    (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+                )
+
+
+seed_rotation()
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
@@ -136,12 +285,12 @@ def seed_db() -> None:
     with get_conn() as conn:
         for start, end, names in shifts:
             exists = conn.execute(
-                "SELECT 1 FROM shifts WHERE start_time=? AND end_time=? AND names=?",
+                _q("SELECT 1 FROM shifts WHERE start_time=? AND end_time=? AND names=?"),
                 (start, end, names),
             ).fetchone()
             if not exists:
                 conn.execute(
-                    "INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)",
+                    _q("INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)"),
                     (start, end, names),
                 )
 
@@ -219,6 +368,24 @@ class SeedAbsencesBody(BaseModel):
     guards: list[SeedAbsenceItem]
 
 
+class RotationConfigUpdateBody(BaseModel):
+    start_date: str
+    period_days: int = 2
+
+
+class RotationRoleCreateBody(BaseModel):
+    name: str
+
+
+class RotationRoleUpdateBody(BaseModel):
+    name: str
+    position: Optional[int] = None
+
+
+class RotationSlotsUpdateBody(BaseModel):
+    slots: List[List[str]]  # 3 lists, one per slot
+
+
 # ── PIN ───────────────────────────────────────────────────────────────────────
 @app.get("/api/pin/required")
 def pin_required():
@@ -264,10 +431,16 @@ def add_guards(body: GuardCreateBody):
             name = raw.strip()
             if not name:
                 continue
-            try:
-                conn.execute("INSERT INTO guards (name) VALUES (?)", (name,))
+            if IS_PG:
+                cur = conn.execute(
+                    "INSERT INTO guards (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+                    (name,),
+                )
+            else:
+                cur = conn.execute("INSERT OR IGNORE INTO guards (name) VALUES (?)", (name,))
+            if cur.rowcount > 0:
                 added.append(name)
-            except sqlite3.IntegrityError:
+            else:
                 skipped.append(name)
     return {"added": added, "skipped": skipped}
 
@@ -275,13 +448,13 @@ def add_guards(body: GuardCreateBody):
 @app.put("/api/guards/{guard_id}")
 def update_guard(guard_id: int, body: GuardUpdateBody):
     with get_conn() as conn:
-        row = conn.execute("SELECT name FROM guards WHERE id=?", (guard_id,)).fetchone()
+        row = conn.execute(_q("SELECT name FROM guards WHERE id=?"), (guard_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Guard not found")
         old_name = row["name"]
         try:
             conn.execute(
-                "UPDATE guards SET name=?,phone=?,role=? WHERE id=?",
+                _q("UPDATE guards SET name=?,phone=?,role=? WHERE id=?"),
                 (body.name, body.phone, body.role, guard_id),
             )
             if body.name != old_name:
@@ -290,10 +463,10 @@ def update_guard(guard_id: int, body: GuardUpdateBody):
                     if old_name in parts:
                         new_names = [body.name if n == old_name else n for n in parts]
                         conn.execute(
-                            "UPDATE shifts SET names=? WHERE id=?",
+                            _q("UPDATE shifts SET names=? WHERE id=?"),
                             (",".join(new_names), shift["id"]),
                         )
-        except sqlite3.IntegrityError:
+        except _IntegrityError:
             raise HTTPException(400, "Name already exists")
     return {"ok": True}
 
@@ -301,7 +474,7 @@ def update_guard(guard_id: int, body: GuardUpdateBody):
 @app.delete("/api/guards/{guard_id}")
 def delete_guard(guard_id: int):
     with get_conn() as conn:
-        conn.execute("DELETE FROM guards WHERE id=?", (guard_id,))
+        conn.execute(_q("DELETE FROM guards WHERE id=?"), (guard_id,))
     return {"ok": True}
 
 
@@ -345,7 +518,7 @@ def add_shifts(body: ShiftsBatchBody):
     with get_conn() as conn:
         for shift in body.shifts:
             conn.execute(
-                "INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)",
+                _q("INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)"),
                 (shift.start_time, shift.end_time, ",".join(shift.names)),
             )
     return {"ok": True, "count": len(body.shifts)}
@@ -354,7 +527,7 @@ def add_shifts(body: ShiftsBatchBody):
 @app.delete("/api/shifts/{shift_id}")
 def delete_shift(shift_id: int):
     with get_conn() as conn:
-        conn.execute("DELETE FROM shifts WHERE id=?", (shift_id,))
+        conn.execute(_q("DELETE FROM shifts WHERE id=?"), (shift_id,))
     return {"ok": True}
 
 
@@ -393,6 +566,11 @@ def suggest_next_shift(limit: int = 3):
     stats = compute_stats(now)
     if not stats:
         return []
+    with get_conn() as conn:
+        absent_rows = conn.execute(
+            "SELECT g.name FROM absences a JOIN guards g ON g.id = a.guard_id WHERE a.returned_at IS NULL"
+        ).fetchall()
+    absent_names = {row["name"] for row in absent_rows}
     candidates = []
     for name, s in stats.items():
         last_dt = s["last_past_date"]
@@ -403,8 +581,10 @@ def suggest_next_shift(limit: int = 3):
             "total": s["past"] + s["future"],
             "last_past_date": last_dt.isoformat() if last_dt else None,
             "overloaded": s["future"] >= OVERLOAD_THRESHOLD,
+            "is_out": name in absent_names,
         })
     candidates.sort(key=lambda g: (
+        1 if g["is_out"] else 0,
         g["future"],
         g["total"],
         g["last_past_date"] if g["last_past_date"] else "0000-00-00",
@@ -418,7 +598,7 @@ def get_whatsapp_url():
     now = datetime.now()
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM shifts WHERE start_time > ? ORDER BY start_time",
+            _q("SELECT * FROM shifts WHERE start_time > ? ORDER BY start_time"),
             (now.isoformat(),),
         ).fetchall()
     if not rows:
@@ -462,10 +642,16 @@ def get_settings():
 def update_settings(body: SettingsBody):
     with get_conn() as conn:
         if body.alert_minutes is not None:
-            conn.execute(
-                "INSERT OR REPLACE INTO settings (key,value) VALUES ('alert_minutes',?)",
-                (str(body.alert_minutes),),
-            )
+            if IS_PG:
+                conn.execute(
+                    "INSERT INTO settings (key,value) VALUES ('alert_minutes',%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+                    (str(body.alert_minutes),),
+                )
+            else:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key,value) VALUES ('alert_minutes',?)",
+                    (str(body.alert_minutes),),
+                )
         else:
             conn.execute("DELETE FROM settings WHERE key='alert_minutes'")
     return {"ok": True}
@@ -503,13 +689,13 @@ def list_absences():
 def mark_leave(body: AbsenceLeaveBody):
     with get_conn() as conn:
         already = conn.execute(
-            "SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL",
+            _q("SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL"),
             (body.guard_id,),
         ).fetchone()
         if already:
             raise HTTPException(400, "Guard is already out")
         conn.execute(
-            "INSERT INTO absences (guard_id,left_at,reason) VALUES (?,?,?)",
+            _q("INSERT INTO absences (guard_id,left_at,reason) VALUES (?,?,?)"),
             (body.guard_id, datetime.now().isoformat(), body.reason),
         )
     return {"ok": True}
@@ -519,13 +705,13 @@ def mark_leave(body: AbsenceLeaveBody):
 def mark_return(body: AbsenceActionBody):
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL",
+            _q("SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL"),
             (body.guard_id,),
         ).fetchone()
         if not row:
             raise HTTPException(400, "Guard is not marked as out")
         conn.execute(
-            "UPDATE absences SET returned_at=? WHERE id=?",
+            _q("UPDATE absences SET returned_at=? WHERE id=?"),
             (datetime.now().isoformat(), row["id"]),
         )
     return {"ok": True}
@@ -535,15 +721,15 @@ def mark_return(body: AbsenceActionBody):
 def reset_absence(body: AbsenceActionBody):
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL",
+            _q("SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL"),
             (body.guard_id,),
         ).fetchone()
         if not row:
             raise HTTPException(400, "Guard is not marked as out")
         now = datetime.now().isoformat()
-        conn.execute("UPDATE absences SET returned_at=? WHERE id=?", (now, row["id"]))
+        conn.execute(_q("UPDATE absences SET returned_at=? WHERE id=?"), (now, row["id"]))
         conn.execute(
-            "INSERT INTO absences (guard_id,left_at) VALUES (?,?)",
+            _q("INSERT INTO absences (guard_id,left_at) VALUES (?,?)"),
             (body.guard_id, now),
         )
     return {"ok": True}
@@ -556,6 +742,7 @@ def absences_history(
     date_to: Optional[str] = None,
 ):
     with get_conn() as conn:
+        ph = "%s" if IS_PG else "?"
         query = """
             SELECT a.id, g.name, g.id as guard_id,
                    a.left_at, a.returned_at, a.reason
@@ -565,13 +752,13 @@ def absences_history(
         """
         params: list = []
         if guard_id:
-            query += " AND a.guard_id = ?"
+            query += f" AND a.guard_id = {ph}"
             params.append(guard_id)
         if date_from:
-            query += " AND a.left_at >= ?"
+            query += f" AND a.left_at >= {ph}"
             params.append(date_from)
         if date_to:
-            query += " AND a.left_at <= ?"
+            query += f" AND a.left_at <= {ph}"
             params.append(date_to + "T23:59:59")
         query += " ORDER BY a.left_at DESC"
         rows = conn.execute(query, params).fetchall()
@@ -638,22 +825,143 @@ def seed_absences(body: SeedAbsencesBody):
     with get_conn() as conn:
         for item in body.guards:
             existing = conn.execute(
-                "SELECT id FROM guards WHERE name=?", (item.name,)
+                _q("SELECT id FROM guards WHERE name=?"), (item.name,)
             ).fetchone()
             if existing:
                 guard_id = existing["id"]
             else:
-                cur = conn.execute("INSERT INTO guards (name) VALUES (?)", (item.name,))
-                guard_id = cur.lastrowid
+                if IS_PG:
+                    cur = conn.execute(
+                        "INSERT INTO guards (name) VALUES (%s) RETURNING id", (item.name,)
+                    )
+                    guard_id = cur.fetchone()["id"]
+                else:
+                    cur = conn.execute("INSERT INTO guards (name) VALUES (?)", (item.name,))
+                    guard_id = cur.lastrowid
             conn.execute(
-                "UPDATE absences SET returned_at=? WHERE guard_id=? AND returned_at IS NULL",
+                _q("UPDATE absences SET returned_at=? WHERE guard_id=? AND returned_at IS NULL"),
                 (item.left_at, guard_id),
             )
             conn.execute(
-                "INSERT INTO absences (guard_id,left_at) VALUES (?,?)",
+                _q("INSERT INTO absences (guard_id,left_at) VALUES (?,?)"),
                 (guard_id, item.left_at),
             )
     return {"ok": True, "count": len(body.guards)}
+
+
+# ── Rotation ──────────────────────────────────────────────────────────────────
+def _build_rotation_response(conn) -> dict:
+    cfg = conn.execute("SELECT start_date, period_days FROM rotation_config WHERE id=1").fetchone()
+    roles = conn.execute("SELECT * FROM rotation_roles ORDER BY position").fetchall()
+    slots_all = conn.execute("SELECT * FROM rotation_slots ORDER BY slot_num").fetchall()
+    slots_map: dict = {}
+    for sl in slots_all:
+        slots_map.setdefault(sl["role_id"], {})[sl["slot_num"]] = _json.loads(sl["names"])
+    roles_out = []
+    for r in roles:
+        s = slots_map.get(r["id"], {})
+        roles_out.append({
+            "id": r["id"],
+            "name": r["name"],
+            "position": r["position"],
+            "slots": [s.get(i, []) for i in range(3)],
+        })
+    return {
+        "start_date": cfg["start_date"] if cfg else "2025-03-08",
+        "period_days": cfg["period_days"] if cfg else 2,
+        "roles": roles_out,
+    }
+
+
+@app.get("/api/rotation")
+def get_rotation():
+    with get_conn() as conn:
+        return _build_rotation_response(conn)
+
+
+@app.put("/api/rotation/config")
+def update_rotation_config(body: RotationConfigUpdateBody):
+    with get_conn() as conn:
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, %s, %s) ON CONFLICT (id) DO UPDATE SET start_date=EXCLUDED.start_date, period_days=EXCLUDED.period_days",
+                (body.start_date, body.period_days),
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
+                (body.start_date, body.period_days),
+            )
+    return {"ok": True}
+
+
+@app.post("/api/rotation/roles", status_code=201)
+def add_rotation_role(body: RotationRoleCreateBody):
+    with get_conn() as conn:
+        max_pos = conn.execute("SELECT MAX(position) as m FROM rotation_roles").fetchone()["m"]
+        pos = (max_pos or 0) + 1
+        if IS_PG:
+            cur = conn.execute(
+                "INSERT INTO rotation_roles (name, position) VALUES (%s, %s) RETURNING id",
+                (body.name, pos),
+            )
+            role_id = cur.fetchone()["id"]
+        else:
+            cur = conn.execute(
+                "INSERT INTO rotation_roles (name, position) VALUES (?, ?)",
+                (body.name, pos),
+            )
+            role_id = cur.lastrowid
+        for slot_num in range(3):
+            conn.execute(
+                _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                (role_id, slot_num, "[]"),
+            )
+    return {"ok": True, "id": role_id}
+
+
+@app.put("/api/rotation/roles/{role_id}")
+def update_rotation_role(role_id: int, body: RotationRoleUpdateBody):
+    with get_conn() as conn:
+        row = conn.execute(_q("SELECT id FROM rotation_roles WHERE id=?"), (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Role not found")
+        if body.position is not None:
+            conn.execute(
+                _q("UPDATE rotation_roles SET name=?, position=? WHERE id=?"),
+                (body.name, body.position, role_id),
+            )
+        else:
+            conn.execute(
+                _q("UPDATE rotation_roles SET name=? WHERE id=?"),
+                (body.name, role_id),
+            )
+    return {"ok": True}
+
+
+@app.delete("/api/rotation/roles/{role_id}")
+def delete_rotation_role(role_id: int):
+    with get_conn() as conn:
+        conn.execute(_q("DELETE FROM rotation_slots WHERE role_id=?"), (role_id,))
+        conn.execute(_q("DELETE FROM rotation_roles WHERE id=?"), (role_id,))
+    return {"ok": True}
+
+
+@app.put("/api/rotation/roles/{role_id}/slots")
+def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
+    if len(body.slots) != 3:
+        raise HTTPException(400, "Must provide exactly 3 slots")
+    with get_conn() as conn:
+        row = conn.execute(_q("SELECT id FROM rotation_roles WHERE id=?"), (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Role not found")
+        conn.execute(_q("DELETE FROM rotation_slots WHERE role_id=?"), (role_id,))
+        for slot_num, names in enumerate(body.slots):
+            conn.execute(
+                _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+            )
+    return {"ok": True}
 
 
 # ── Serve built React app ─────────────────────────────────────────────────────
