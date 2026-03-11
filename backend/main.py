@@ -97,6 +97,9 @@ def get_conn():
         if "sslmode" not in url:
             sep = "&" if "?" in url else "?"
             url = url + sep + "sslmode=require"
+        if "connect_timeout" not in url:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + "connect_timeout=10"
         raw = psycopg2.connect(url)
         conn = PgConn(raw)
     else:
@@ -208,8 +211,7 @@ try:
     init_db()
     _log.info("init_db: OK (IS_PG=%s)", IS_PG)
 except Exception:
-    _log.error("init_db FAILED:\n%s", traceback.format_exc())
-    raise
+    _log.error("init_db FAILED (server will still start):\n%s", traceback.format_exc())
 
 
 # ── Seed Rotation ─────────────────────────────────────────────────────────────
