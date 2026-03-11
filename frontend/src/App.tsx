@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import ShiftsTab from "./components/ShiftsTab";
-import AddShiftTab from "./components/AddShiftTab";
 import GuardsTab from "./components/GuardsTab";
 import StatsTab from "./components/StatsTab";
 import PinScreen from "./components/PinScreen";
 import AbsencesTab from "./features/absences/AbsencesTab";
+import RotationTab from "./features/rotation/RotationTab";
 import { getSettings, updateSettings } from "./features/absences/api";
 import { useTheme } from "./hooks/useTheme";
 
 const TABS = [
   { id: "shifts",   icon: "📋", label: "משמרות"    },
   { id: "absences", icon: "🚪", label: "יציאות"    },
-  { id: "add",      icon: "➕", label: "הוסף"      },
-  { id: "guards",   icon: "👥", label: "שומרים"    },
+  { id: "rotation", icon: "🔄", label: "סבב"       },
+  { id: "guards",   icon: "👥", label: "כוח אדם"   },
   { id: "stats",    icon: "📊", label: "סטטיסטיקה" },
 ] as const;
 
@@ -177,7 +177,7 @@ export default function App() {
       <main className="max-w-2xl mx-auto px-4 pt-5">
         {tab === "shifts"   && <ShiftsTab />}
         {tab === "absences" && <AbsencesTab />}
-        {tab === "add"      && <AddShiftTab onSaved={() => setTab("shifts")} />}
+        {tab === "rotation" && <RotationTab />}
         {tab === "guards"   && <GuardsTab />}
         {tab === "stats"    && <StatsTab />}
       </main>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Trash2, MessageCircle, Copy, Check, X } from "lucide-react";
+import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown } from "lucide-react";
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
+import AddShiftTab from "./AddShiftTab";
 
 type Filter = "all" | "future" | "past" | "week" | "range";
 
@@ -53,6 +54,7 @@ export default function ShiftsTab() {
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAddPanel, setShowAddPanel] = useState(false);
 
   /** Derive the backend filter + date range from UI state */
   function getApiParams(): {
@@ -188,6 +190,32 @@ export default function ShiftsTab() {
           </button>
         </div>
       </div>
+
+      {/* Add shift panel toggle */}
+      <button
+        onClick={() => setShowAddPanel((v) => !v)}
+        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border
+                    font-semibold text-sm transition-all
+                    ${showAddPanel
+                      ? "bg-primary/10 border-primary/40 text-primary-light"
+                      : "bg-bg-card border-bg-border text-text-muted hover:text-text hover:border-primary/30"
+                    }`}
+      >
+        <span className="flex items-center gap-2">
+          <Plus size={16} />
+          הוסף משמרת
+        </span>
+        <ChevronDown
+          size={16}
+          className={`transition-transform duration-200 ${showAddPanel ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {showAddPanel && (
+        <div className="slide-in">
+          <AddShiftTab onSaved={() => { setShowAddPanel(false); load(); }} />
+        </div>
+      )}
 
       {/* Date range inputs */}
       {filter === "range" && (

@@ -73,6 +73,28 @@ def init_db() -> None:
                 value TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rotation_config (
+                id           INTEGER PRIMARY KEY,
+                start_date   TEXT NOT NULL,
+                period_days  INTEGER NOT NULL DEFAULT 2
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rotation_roles (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                name     TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rotation_slots (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_id  INTEGER NOT NULL REFERENCES rotation_roles(id) ON DELETE CASCADE,
+                slot_num INTEGER NOT NULL,
+                names    TEXT NOT NULL DEFAULT '[]'
+            )
+        """)
         # Safe migrations for existing DBs
         for sql in [
             "ALTER TABLE guards ADD COLUMN phone TEXT",
@@ -97,6 +119,56 @@ def init_db() -> None:
 
 
 init_db()
+
+
+# ── Seed Rotation ─────────────────────────────────────────────────────────────
+import json as _json
+
+_DEFAULT_ROTATION = {
+    "start_date": "2025-03-08",
+    "period_days": 2,
+    "roles": [
+        {"name": "קצינים",  "slots": [["זיו"], ["טל"], ["שלמה"]]},
+        {"name": "מפקדים", "slots": [["בועז"], ["יוסף"], ["אביתר"]]},
+        {"name": "פקחים",  "slots": [
+            ["שי", "בוחניק", "עוז", "חי"],
+            ["חן", "גיל", "ירין", "ביטון"],
+            ["דדון", "שלומי", "תלקר", "חי מגנזי"],
+        ]},
+        {"name": "נהגים",  "slots": [["גיל", "עוז"], ["ישראל", "רומן"], ["מתנאל", "נוני"]]},
+        {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["נדב", "לירן"], ["גל", "עמיר", "שלומי"]]},
+        {"name": "עתודאים", "slots": [
+            ["יהונתן קפיטל", "אור הדר", "אריאל קרליך"],
+            ["שי שני", "דוד סויסה", "יובל מועלם", "תומר שמאי"],
+            ["רועי נגאוקר", "טל ברוקר", "מתן קזז", "תומר שמאי"],
+        ]},
+    ],
+}
+
+
+def seed_rotation() -> None:
+    with get_conn() as conn:
+        existing = conn.execute("SELECT id FROM rotation_config").fetchone()
+        if existing:
+            return
+        conn.execute(
+            "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
+            (_DEFAULT_ROTATION["start_date"], _DEFAULT_ROTATION["period_days"]),
+        )
+        for pos, role_data in enumerate(_DEFAULT_ROTATION["roles"]):
+            cur = conn.execute(
+                "INSERT INTO rotation_roles (name, position) VALUES (?, ?)",
+                (role_data["name"], pos),
+            )
+            role_id = cur.lastrowid
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    "INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)",
+                    (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+                )
+
+
+seed_rotation()
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
@@ -214,6 +286,24 @@ class SeedAbsenceItem(BaseModel):
 
 class SeedAbsencesBody(BaseModel):
     guards: list[SeedAbsenceItem]
+
+
+class RotationConfigUpdateBody(BaseModel):
+    start_date: str
+    period_days: int = 2
+
+
+class RotationRoleCreateBody(BaseModel):
+    name: str
+
+
+class RotationRoleUpdateBody(BaseModel):
+    name: str
+    position: Optional[int] = None
+
+
+class RotationSlotsUpdateBody(BaseModel):
+    slots: List[List[str]]  # 3 lists, one per slot
 
 
 # ── PIN ───────────────────────────────────────────────────────────────────────
@@ -390,6 +480,12 @@ def suggest_next_shift(limit: int = 3):
     stats = compute_stats(now)
     if not stats:
         return []
+    # Get currently absent guards
+    with get_conn() as conn:
+        absent_rows = conn.execute(
+            "SELECT g.name FROM absences a JOIN guards g ON g.id = a.guard_id WHERE a.returned_at IS NULL"
+        ).fetchall()
+    absent_names = {row["name"] for row in absent_rows}
     candidates = []
     for name, s in stats.items():
         last_dt = s["last_past_date"]
@@ -400,8 +496,11 @@ def suggest_next_shift(limit: int = 3):
             "total": s["past"] + s["future"],
             "last_past_date": last_dt.isoformat() if last_dt else None,
             "overloaded": s["future"] >= OVERLOAD_THRESHOLD,
+            "is_out": name in absent_names,
         })
+    # Sort: present guards first, then by future shifts, total, last date
     candidates.sort(key=lambda g: (
+        1 if g["is_out"] else 0,
         g["future"],
         g["total"],
         g["last_past_date"] if g["last_past_date"] else "0000-00-00",
@@ -651,6 +750,108 @@ def seed_absences(body: SeedAbsencesBody):
                 (guard_id, item.left_at),
             )
     return {"ok": True, "count": len(body.guards)}
+
+
+# ── Rotation ──────────────────────────────────────────────────────────────────
+def _build_rotation_response(conn) -> dict:
+    cfg = conn.execute("SELECT start_date, period_days FROM rotation_config WHERE id=1").fetchone()
+    roles = conn.execute("SELECT * FROM rotation_roles ORDER BY position").fetchall()
+    slots_all = conn.execute("SELECT * FROM rotation_slots ORDER BY slot_num").fetchall()
+    slots_map: dict = {}
+    for sl in slots_all:
+        slots_map.setdefault(sl["role_id"], {})[sl["slot_num"]] = _json.loads(sl["names"])
+    roles_out = []
+    for r in roles:
+        s = slots_map.get(r["id"], {})
+        roles_out.append({
+            "id": r["id"],
+            "name": r["name"],
+            "position": r["position"],
+            "slots": [s.get(i, []) for i in range(3)],
+        })
+    return {
+        "start_date": cfg["start_date"] if cfg else "2025-03-08",
+        "period_days": cfg["period_days"] if cfg else 2,
+        "roles": roles_out,
+    }
+
+
+@app.get("/api/rotation")
+def get_rotation():
+    with get_conn() as conn:
+        return _build_rotation_response(conn)
+
+
+@app.put("/api/rotation/config")
+def update_rotation_config(body: RotationConfigUpdateBody):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
+            (body.start_date, body.period_days),
+        )
+    return {"ok": True}
+
+
+@app.post("/api/rotation/roles", status_code=201)
+def add_rotation_role(body: RotationRoleCreateBody):
+    with get_conn() as conn:
+        max_pos = conn.execute("SELECT MAX(position) as m FROM rotation_roles").fetchone()["m"]
+        pos = (max_pos or 0) + 1
+        cur = conn.execute(
+            "INSERT INTO rotation_roles (name, position) VALUES (?, ?)",
+            (body.name, pos),
+        )
+        role_id = cur.lastrowid
+        for slot_num in range(3):
+            conn.execute(
+                "INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)",
+                (role_id, slot_num, "[]"),
+            )
+    return {"ok": True, "id": role_id}
+
+
+@app.put("/api/rotation/roles/{role_id}")
+def update_rotation_role(role_id: int, body: RotationRoleUpdateBody):
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM rotation_roles WHERE id=?", (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Role not found")
+        if body.position is not None:
+            conn.execute(
+                "UPDATE rotation_roles SET name=?, position=? WHERE id=?",
+                (body.name, body.position, role_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE rotation_roles SET name=? WHERE id=?",
+                (body.name, role_id),
+            )
+    return {"ok": True}
+
+
+@app.delete("/api/rotation/roles/{role_id}")
+def delete_rotation_role(role_id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM rotation_slots WHERE role_id=?", (role_id,))
+        conn.execute("DELETE FROM rotation_roles WHERE id=?", (role_id,))
+    return {"ok": True}
+
+
+@app.put("/api/rotation/roles/{role_id}/slots")
+def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
+    if len(body.slots) != 3:
+        raise HTTPException(400, "Must provide exactly 3 slots")
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM rotation_roles WHERE id=?", (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Role not found")
+        conn.execute("DELETE FROM rotation_slots WHERE role_id=?", (role_id,))
+        for slot_num, names in enumerate(body.slots):
+            conn.execute(
+                "INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)",
+                (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+            )
+    return {"ok": True}
 
 
 # ── Serve built React app ─────────────────────────────────────────────────────
