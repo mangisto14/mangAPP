@@ -158,15 +158,23 @@ def init_db() -> None:
             )
         """)
         # Safe migrations for existing DBs
-        for sql in [
+        migrations = [
             "ALTER TABLE guards ADD COLUMN phone TEXT",
             "ALTER TABLE guards ADD COLUMN role TEXT",
             "ALTER TABLE absences ADD COLUMN reason TEXT",
-        ]:
-            try:
-                conn.execute(sql)
-            except Exception:
-                pass
+        ]
+        for sql in migrations:
+            if IS_PG:
+                # PostgreSQL: use IF NOT EXISTS to avoid transaction abort
+                safe_sql = sql.replace(
+                    "ADD COLUMN ", "ADD COLUMN IF NOT EXISTS "
+                )
+                conn.execute(safe_sql)
+            else:
+                try:
+                    conn.execute(sql)
+                except Exception:
+                    pass
         # One-time: set reason='חופשה' for open absences with no reason
         migrated = conn.execute(
             "SELECT value FROM settings WHERE key='migration_open_reason_set'"
