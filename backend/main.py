@@ -8,7 +8,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from contextlib import contextmanager
-import os, urllib.parse, csv, io
+import os, urllib.parse, csv, io, logging, traceback
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+_log = logging.getLogger("mangapp")
 
 app = FastAPI(title="מצבת כוח API", version="3.0.0")
 
@@ -86,7 +89,15 @@ def db_path() -> str:
 @contextmanager
 def get_conn():
     if IS_PG:
-        raw = psycopg2.connect(DATABASE_URL)
+        url = DATABASE_URL
+        # Supabase sometimes provides postgres:// – psycopg2 prefers postgresql://
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        # Ensure SSL for Supabase / hosted PG
+        if "sslmode" not in url:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + "sslmode=require"
+        raw = psycopg2.connect(url)
         conn = PgConn(raw)
     else:
         raw = sqlite3.connect(db_path())
@@ -193,7 +204,12 @@ def init_db() -> None:
                 )
 
 
-init_db()
+try:
+    init_db()
+    _log.info("init_db: OK (IS_PG=%s)", IS_PG)
+except Exception:
+    _log.error("init_db FAILED:\n%s", traceback.format_exc())
+    raise
 
 
 # ── Seed Rotation ─────────────────────────────────────────────────────────────
@@ -256,7 +272,11 @@ def seed_rotation() -> None:
                 )
 
 
-seed_rotation()
+try:
+    seed_rotation()
+    _log.info("seed_rotation: OK")
+except Exception:
+    _log.error("seed_rotation FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
@@ -303,7 +323,11 @@ def seed_db() -> None:
                 )
 
 
-seed_db()
+try:
+    seed_db()
+    _log.info("seed_db: OK")
+except Exception:
+    _log.error("seed_db FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed Absences ─────────────────────────────────────────────────────────────
@@ -376,7 +400,11 @@ def seed_absences_data() -> None:
             )
 
 
-seed_absences_data()
+try:
+    seed_absences_data()
+    _log.info("seed_absences_data: OK")
+except Exception:
+    _log.error("seed_absences_data FAILED:\n%s", traceback.format_exc())
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -465,6 +493,27 @@ class RotationRoleUpdateBody(BaseModel):
 
 class RotationSlotsUpdateBody(BaseModel):
     slots: List[List[str]]  # 3 lists, one per slot
+
+
+# ── Health / Debug ────────────────────────────────────────────────────────────
+@app.get("/api/health")
+def health():
+    try:
+        with get_conn() as conn:
+            if IS_PG:
+                tables = [r[0] for r in conn.execute(
+                    "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"
+                ).fetchall()]
+            else:
+                tables = [r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                ).fetchall()]
+            counts = {}
+            for t in tables:
+                counts[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        return {"status": "ok", "db": "pg" if IS_PG else "sqlite", "tables": counts}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 # ── PIN ───────────────────────────────────────────────────────────────────────
