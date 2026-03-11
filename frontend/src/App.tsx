@@ -110,7 +110,7 @@ export default function App() {
       setPinReady(true);
       return;
     }
-    fetch("/api/pin/required")
+    fetch((import.meta.env.VITE_API_URL ?? "") + "/api/pin/required")
       .then((r) => r.json())
       .then((d) => setPinReady(!d.required))
       .catch(() => setPinReady(true));
