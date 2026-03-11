@@ -208,8 +208,7 @@ try:
     init_db()
     _log.info("init_db: OK (IS_PG=%s)", IS_PG)
 except Exception:
-    _log.error("init_db FAILED:\n%s", traceback.format_exc())
-    raise
+    _log.error("init_db FAILED (server will still start):\n%s", traceback.format_exc())
 
 
 # ── Seed Rotation ─────────────────────────────────────────────────────────────
