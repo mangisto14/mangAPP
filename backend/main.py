@@ -220,20 +220,22 @@ import json as _json
 _DEFAULT_ROTATION = {
     "start_date": "2025-03-08",
     "period_days": 2,
+    # מחזור 7-ימי: ו-א (ראשון+שני 2י), א-ג (שלישי-חמישי 3י), ג-ה (שישי+שבת 2י)
+    # slot[0]=ו-א, slot[1]=ג-ה, slot[2]=א-ג  (נוסחה: ((1-שבוע-תקופה)%3+3)%3)
     "roles": [
-        {"name": "קצינים",  "slots": [["זיו"], ["טל"], ["שלמה"]]},
-        {"name": "מפקדים", "slots": [["בועז"], ["יוסף"], ["אביתר"]]},
+        {"name": "קצינים",  "slots": [["טל"], ["שלמה"], ["זיו"]]},
+        {"name": "מפקדים", "slots": [["יוסף"], ["אביתר"], ["בועז"]]},
         {"name": "פקחים",  "slots": [
-            ["שי", "בוחניק", "עוז", "חי"],
-            ["חן", "גיל", "ירין", "ביטון"],
-            ["דדון", "שלומי", "תלקר", "חי מגנזי"],
+            ["שי", "בוחניק", "עוז", "חי מגנזי"],
+            ["דדון", "שלומי", "תלקר", "ביטון"],
+            ["חן", "גיל", "ירין"],
         ]},
-        {"name": "נהגים",  "slots": [["גיל", "עוז"], ["ישראל", "רומן"], ["מתנאל", "נוני"]]},
-        {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["נדב", "לירן"], ["גל", "עמיר", "שלומי"]]},
+        {"name": "נהגים",  "slots": [["גיל", "עוז"], ["מתנאל", "נוני"], ["ישראל", "רומן"]]},
+        {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["גל", "עמיר", "שלומי"], ["נדב", "לירן"]]},
         {"name": "עתודאים", "slots": [
             ["יהונתן קפיטל", "אור הדר", "אריאל קרליך"],
-            ["שי שני", "דוד סויסה", "יובל מועלם", "תומר שמאי"],
             ["רועי נגאוקר", "טל ברוקר", "מתן קזז", "תומר שמאי"],
+            ["שי שני", "דוד סויסה", "יובל מועלם", "תומר שמאי"],
         ]},
     ],
 }
@@ -279,6 +281,46 @@ try:
     _log.info("seed_rotation: OK")
 except Exception:
     _log.error("seed_rotation FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v2() -> None:
+    """מיגרציה חד-פעמית: תיקון סדר slots לפי מחזור ו-א/א-ג/ג-ה הנכון."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v2_migrated'"
+        ).fetchone()
+        if already:
+            return
+        for role_data in _DEFAULT_ROTATION["roles"]:
+            role = conn.execute(
+                _q("SELECT id FROM rotation_roles WHERE name=?"),
+                (role_data["name"],),
+            ).fetchone()
+            if not role:
+                continue
+            role_id = role["id"]
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE role_id=? AND slot_num=?"),
+                    (_json.dumps(names, ensure_ascii=False), role_id, slot_num),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v2_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v2_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v2()
+    _log.info("migrate_rotation_v2: OK")
+except Exception:
+    _log.error("migrate_rotation_v2 FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────

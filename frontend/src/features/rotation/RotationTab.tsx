@@ -16,33 +16,58 @@ function fmtShort(d: Date): string {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-/** Build all periods for a given week offset (0 = current week window) */
+// 7-day cycle: [ו-א: Sun+Mon (2d), א-ג: Tue+Wed+Thu (3d), ג-ה: Fri+Sat (2d)]
+// Day-of-week starts: ו-א=0(Sun), א-ג=2(Tue), ג-ה=5(Fri)
+const PERIOD_CONFIG = [
+  { label: "ו-א", days: 2, startDow: 0 },
+  { label: "א-ג", days: 3, startDow: 2 },
+  { label: "ג-ה", days: 2, startDow: 5 },
+] as const;
+
+/** slotIndex = ((1 - weekNum - periodInWeek) % 3 + 3) % 3 */
+function slotForWeekPeriod(weekNum: number, periodInWeek: number): number {
+  return ((1 - weekNum - periodInWeek) % 3 + 3) % 3;
+}
+
+/** Build 9 periods (3 full weeks) for a given week offset (0 = current week) */
 function buildPeriods(config: RotationConfig, weekOffset: number): RotationPeriod[] {
-  const { start_date, period_days } = config;
-  const origin = new Date(start_date + "T00:00:00");
+  const origin = new Date(config.start_date + "T00:00:00");
   const now = new Date();
 
-  // Window: 7 periods per "page" (configurable), shifted by weekOffset
-  const windowSize = 7;
-  const windowStart = addDays(now, weekOffset * windowSize);
+  // Cycle anchor = first Sunday >= origin
+  const originDow = origin.getDay();
+  const daysToSunday = originDow === 0 ? 0 : 7 - originDow;
+  const cycleAnchor = addDays(origin, daysToSunday);
 
-  // Find the first period that overlaps our window
-  const elapsedDays = Math.floor((windowStart.getTime() - origin.getTime()) / 86400000);
-  const firstPeriodNum = Math.max(0, Math.floor(elapsedDays / period_days));
+  // Display window starts at Sunday of current week + weekOffset weeks
+  const nowDow = now.getDay();
+  const currentWeekSunday = addDays(now, -nowDow);
+  const displayWeekSunday = addDays(currentWeekSunday, weekOffset * 7);
+
+  // Week number relative to cycleAnchor
+  const daysFromAnchor = Math.floor(
+    (displayWeekSunday.getTime() - cycleAnchor.getTime()) / 86400000
+  );
+  const startWeekNum = Math.floor(daysFromAnchor / 7);
 
   const periods: RotationPeriod[] = [];
-  for (let i = firstPeriodNum; i < firstPeriodNum + windowSize; i++) {
-    const start = addDays(origin, i * period_days);
-    const end = addDays(start, period_days);
-    const slotIndex = i % 3;
-    const isActive = now >= start && now < end;
-    periods.push({
-      start,
-      end,
-      slotIndex,
-      label: `${fmtShort(start)}-${fmtShort(end)}`,
-      isActive,
-    });
+  for (let w = startWeekNum; w < startWeekNum + 3; w++) {
+    const weekStart = addDays(cycleAnchor, w * 7);
+    for (let p = 0; p < 3; p++) {
+      const pc = PERIOD_CONFIG[p];
+      const start = addDays(weekStart, pc.startDow);
+      const end = addDays(start, pc.days);
+      const slotIndex = slotForWeekPeriod(w, p);
+      const isActive = now >= start && now < end;
+      periods.push({
+        start,
+        end,
+        slotIndex,
+        label: `${fmtShort(start)}-${fmtShort(end)}`,
+        periodLabel: pc.label,
+        isActive,
+      });
+    }
   }
   return periods;
 }
@@ -76,7 +101,7 @@ export default function RotationTab() {
   const periods = buildPeriods(config, weekOffset);
   const activePeriod = periods.find((p) => p.isActive);
 
-  // Window label
+  // Window label (first period start → last period end)
   const windowLabel = `${fmtShort(periods[0].start)} – ${fmtShort(periods[periods.length - 1].end)}`;
 
   const SLOT_COLORS = [
@@ -136,15 +161,15 @@ export default function RotationTab() {
         <div className="text-xs font-semibold text-primary-light bg-primary/10 border border-primary/20
                         px-3 py-1.5 rounded-xl inline-flex items-center gap-2">
           <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-          תקופה פעילה: {activePeriod.label} · קבוצה {activePeriod.slotIndex + 1}
+          תקופה פעילה: {activePeriod.label} · {activePeriod.periodLabel}
         </div>
       )}
 
       {/* Legend */}
       <div className="flex gap-3 flex-wrap">
-        {[0, 1, 2].map((i) => (
+        {PERIOD_CONFIG.map((pc, i) => (
           <span key={i} className={`text-xs font-semibold px-3 py-1 rounded-full border ${SLOT_COLORS[i]}`}>
-            קבוצה {i + 1}
+            {pc.label}
           </span>
         ))}
       </div>
@@ -169,7 +194,7 @@ export default function RotationTab() {
                 >
                   {p.label}
                   <div className={`text-[10px] mt-0.5 font-normal ${p.isActive ? "text-primary-light" : "text-text-dim/60"}`}>
-                    קב׳ {p.slotIndex + 1}
+                    {p.periodLabel}
                   </div>
                 </th>
               ))}
