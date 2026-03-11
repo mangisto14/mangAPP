@@ -298,6 +298,79 @@ def seed_db() -> None:
 seed_db()
 
 
+# ── Seed Absences ─────────────────────────────────────────────────────────────
+def seed_absences_data() -> None:
+    """Seed historical absence data (runs once, skipped if already seeded)."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='seed_absences_v1'"
+        ).fetchone()
+        if already:
+            return
+
+        records = [
+            # (name, reason, left_at, returned_at)  — None = still out
+            ("תומר שמאי",     "מחלה",  "2026-03-10T20:58:00", None),
+            ("אסף אבינועם",   "אישי",  "2026-03-10T19:32:00", "2026-03-10T20:58:00"),
+            ("מתנאל בנימין",  "אישי",  "2026-03-10T19:30:00", "2026-03-10T20:58:00"),
+            ("אביתר ביטון",   "אישי",  "2026-03-10T16:28:00", "2026-03-10T16:28:00"),
+            ("אביתר ביטון",   None,    "2026-03-10T14:04:00", "2026-03-10T14:25:00"),
+            ("אור הדר",       None,    "2026-03-10T14:01:00", "2026-03-10T14:01:00"),
+            ("אביתר ביטון",   None,    "2026-03-10T13:50:00", "2026-03-10T14:01:00"),
+            ("אביתר כהן",     None,    "2026-03-10T13:50:00", "2026-03-10T14:01:00"),
+            ("אביתר ביטון",   None,    "2026-03-10T13:49:00", "2026-03-10T13:50:00"),
+            ("זיו יוספי",     "חופשה", "2026-03-10T10:00:00", None),
+            ("בועז רפאלי",    "חופשה", "2026-03-10T10:00:00", None),
+            ("חן דנסינגר",    "חופשה", "2026-03-10T10:00:00", None),
+            ("גיל שמואל",     "חופשה", "2026-03-10T10:00:00", None),
+            ("ירין וקנין",    "חופשה", "2026-03-10T10:00:00", None),
+            ("ישראל נעים",    "חופשה", "2026-03-10T10:00:00", None),
+            ("רומן פלדמן",    "חופשה", "2026-03-10T10:00:00", None),
+            ("נדב אברהם",     "חופשה", "2026-03-10T10:00:00", None),
+            ("לירן טביבזאדה", "חופשה", "2026-03-10T10:00:00", None),
+            ("גל עמר",        "חופשה", "2026-03-10T10:00:00", None),
+            ("אור הדר",       "חופשה", "2026-03-10T10:00:00", None),
+            ("אריאל קרליך",   "חופשה", "2026-03-10T10:00:00", None),
+            ("יהונתן פריאל",  "חופשה", "2026-03-10T10:00:00", None),
+        ]
+
+        for name, reason, left_at, returned_at in records:
+            if IS_PG:
+                cur = conn.execute(
+                    "INSERT INTO guards (name) VALUES (%s) ON CONFLICT (name) DO NOTHING RETURNING id",
+                    (name,),
+                )
+                row = cur.fetchone()
+                if row:
+                    gid = row["id"]
+                else:
+                    gid = conn.execute(
+                        "SELECT id FROM guards WHERE name=%s", (name,)
+                    ).fetchone()["id"]
+            else:
+                conn.execute("INSERT OR IGNORE INTO guards (name) VALUES (?)", (name,))
+                gid = conn.execute(
+                    "SELECT id FROM guards WHERE name=?", (name,)
+                ).fetchone()["id"]
+
+            conn.execute(
+                _q("INSERT INTO absences (guard_id, left_at, returned_at, reason) VALUES (?,?,?,?)"),
+                (gid, left_at, returned_at, reason),
+            )
+
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('seed_absences_v1', '1') ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('seed_absences_v1', '1')"
+            )
+
+
+seed_absences_data()
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def compute_stats(now: datetime) -> dict:
     with get_conn() as conn:
