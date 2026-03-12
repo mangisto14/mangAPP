@@ -20,11 +20,7 @@ export default function EditRotationModal({ config, onClose, onSaved }: Props) {
   const [roles, setRoles] = useState<RotationRole[]>(
     config.roles.map((r) => ({
       ...r,
-      slots: [
-        r.slots[0] ?? [],
-        r.slots[1] ?? [],
-        r.slots[2] ?? [],
-      ],
+      slots: Array.from({ length: 9 }, (_, i) => r.slots[i] ?? []),
     }))
   );
   const [newRoleName, setNewRoleName] = useState("");
@@ -34,7 +30,7 @@ export default function EditRotationModal({ config, onClose, onSaved }: Props) {
   const updateSlotText = (roleIdx: number, slotIdx: number, text: string) => {
     setRoles((prev) => {
       const next = [...prev];
-      const role = { ...next[roleIdx], slots: [...next[roleIdx].slots] as [string[], string[], string[]] };
+      const role = { ...next[roleIdx], slots: [...next[roleIdx].slots] };
       role.slots[slotIdx] = text.split(",").map((s) => s.trim()).filter(Boolean);
       next[roleIdx] = role;
       return next;
@@ -58,7 +54,7 @@ export default function EditRotationModal({ config, onClose, onSaved }: Props) {
     if (!name) return;
     setRoles((prev) => [
       ...prev,
-      { id: -Date.now(), name, position: prev.length, slots: [[], [], []] },
+      { id: -Date.now(), name, position: prev.length, slots: Array.from({ length: 9 }, () => []) },
     ]);
     setNewRoleName("");
   };
@@ -164,19 +160,22 @@ export default function EditRotationModal({ config, onClose, onSaved }: Props) {
                   <Trash2 size={16} />
                 </button>
               </div>
-              {[0, 1, 2].map((si) => (
-                <div key={si}>
-                  <label className="text-xs text-text-dim mb-1 block">
-                    קבוצה {si + 1} (מופרד בפסיק)
-                  </label>
-                  <input
-                    value={(role.slots[si] ?? []).join(", ")}
-                    onChange={(e) => updateSlotText(ri, si, e.target.value)}
-                    placeholder="שם1, שם2, שם3"
-                    className="input text-sm w-full"
-                  />
-                </div>
-              ))}
+              {Array.from({ length: 9 }, (_, si) => {
+                const periodLabels = ["א-ג", "ג-ה", "ו-א"];
+                return (
+                  <div key={si}>
+                    <label className="text-xs text-text-dim mb-1 block">
+                      תקופה {si + 1} · {periodLabels[si % 3]} (מופרד בפסיק)
+                    </label>
+                    <input
+                      value={(role.slots[si] ?? []).join(", ")}
+                      onChange={(e) => updateSlotText(ri, si, e.target.value)}
+                      placeholder="שם1, שם2, שם3"
+                      className="input text-sm w-full"
+                    />
+                  </div>
+                );
+              })}
             </div>
           ))}
 

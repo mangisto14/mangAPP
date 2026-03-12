@@ -16,7 +16,7 @@ function fmtShort(d: Date): string {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-// 7-day cycle: [א-ג: Sun+Mon (2d), ג-ה: Tue+Wed+Thu (3d), ו-א: Fri+Sat (2d)]
+// 7-day cycle: [א-ג: Sun+Mon (2d), ג-ה: Tue+Thu (2d), ו-א: Fri+Sat (2d)]
 // Day-of-week starts: א-ג=0(Sun), ג-ה=2(Tue), ו-א=5(Fri)
 const PERIOD_CONFIG = [
   { label: "א-ג", days: 2, startDow: 0 },
@@ -24,9 +24,10 @@ const PERIOD_CONFIG = [
   { label: "ו-א", days: 2, startDow: 5 },
 ] as const;
 
-/** slotIndex = ((1 - weekNum - periodInWeek) % 3 + 3) % 3 */
+// מחזור 9 תקופות (3 שבועות × 3 תקופות/שבוע)
+// slotIndex = (weekNum * 3 + periodInWeek) % 9
 function slotForWeekPeriod(weekNum: number, periodInWeek: number): number {
-  return ((1 - weekNum - periodInWeek) % 3 + 3) % 3;
+  return (weekNum * 3 + periodInWeek) % 9;
 }
 
 /** Build 9 periods (3 full weeks) for a given week offset (0 = current week) */
@@ -104,10 +105,11 @@ export default function RotationTab() {
   // Window label (first period start → last period end)
   const windowLabel = `${fmtShort(periods[0].start)} – ${fmtShort(periods[periods.length - 1].end)}`;
 
+  // צבעים לפי סוג תקופה: [א-ג=כחול, ג-ה=כתום, ו-א=ירוק]
   const SLOT_COLORS = [
-    "bg-primary/10 border-primary/25 text-primary-light",
-    "bg-success/10 border-success/25 text-success",
-    "bg-warning/10 border-warning/25 text-warning",
+    "bg-primary/10 border-primary/25 text-primary-light",  // 0: א-ג
+    "bg-warning/10 border-warning/25 text-warning",         // 1: ג-ה
+    "bg-success/10 border-success/25 text-success",         // 2: ו-א
   ];
 
   return (
@@ -225,7 +227,7 @@ export default function RotationTab() {
                             <div
                               key={name}
                               className={`text-xs px-1.5 py-0.5 rounded-lg border font-medium
-                                ${SLOT_COLORS[p.slotIndex]}`}
+                                ${SLOT_COLORS[p.slotIndex % 3]}`}
                             >
                               {name}
                             </div>

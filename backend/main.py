@@ -240,6 +240,55 @@ _DEFAULT_ROTATION = {
     ],
 }
 
+# מחזור 9-תקופות: כל תקופה עם שיבוץ עצמאי (3 שבועות × 3 תקופות/שבוע)
+# slot 0=08/3(א-ג), 1=10/3(ג-ה), 2=13/3(ו-א), 3=15/3(א-ג), 4=17/3(ג-ה),
+#       5=20/3(ו-א), 6=22/3(א-ג), 7=24/3(ג-ה), 8=27/3(ו-א)
+_ROTATION_9SLOTS: dict = {
+    "start_date": "2026-03-08",
+    "roles": {
+        "קצינים": [
+            ["טל"], ["זיו"], ["שלמה"], ["זיו"], ["שלמה"],
+            ["טל"], ["שלמה"], ["טל"], ["זיו"],
+        ],
+        "מפקדים": [
+            ["יוסף"], ["בועז"], ["אביתר"], ["בועז"], ["אביתר"],
+            ["יוסף"], ["אביתר"], ["יוסף"], ["בועז"],
+        ],
+        "פקחים": [
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],   # 0: 08/3
+            ["חן", "גיל שמואל", "ירין"],                    # 1: 10/3
+            ["דדון", "שלומי", "טלקר", "ביטון"],             # 2: 13/3
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],   # 3: 15/3
+            ["דדון", "שלומי", "טלקר", "ביטון"],             # 4: 17/3
+            ["חן", "גיל בוחניק", "ירין"],                   # 5: 20/3
+            ["דדון", "שלומי", "טלקר", "ביטון"],             # 6: 22/3
+            ["חן", "גיל בוחניק", "ירין"],                   # 7: 24/3
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],   # 8: 27/3
+        ],
+        "נהגים": [
+            ["גיל", "עוז"], ["ישראל", "רומן"], ["מתנאל", "נוני"],
+            ["גיל", "עוז"], ["מתנאל", "נוני"], ["ישראל", "רומן"],
+            ["מתנאל", "נוני"], ["ישראל", "רומן"], ["גיל", "עוז"],
+        ],
+        "מטהרים": [
+            ["אסף", "אליאב"], ["נדב", "לירן", "גל"], ["עמיר", "שלומי ס"],
+            ["אסף", "אליאב"], ["עמיר", "שלומי ס"], ["נדב", "לירן", "גל"],
+            ["עמיר", "שלומי ס"], ["נדב", "לירן", "גל"], ["אסף", "אליאב"],
+        ],
+        "עתודאים": [
+            ["שי שני", "דוד סויסה", "יובל מועלם", "טל ברוקר"],  # 0: 08/3
+            ["יהונתן פריאל", "אור הדר", "אריאל קרליך"],          # 1: 10/3
+            ["רועי נגאוקר", "מתן קזז", "תומר שמאי"],             # 2: 13/3
+            ["יהונתן פריאל", "אור הדר", "אריאל קרליך"],          # 3: 15/3
+            ["רועי נגאוקר", "מתן קזז", "תומר שמאי"],             # 4: 17/3
+            ["שי שני", "דוד סויסה", "יובל מועלם", "טל ברוקר"],  # 5: 20/3
+            ["רועי נגאוקר", "מתן קזז", "תומר שמאי"],             # 6: 22/3
+            ["שי שני", "דוד סויסה", "יובל מועלם", "טל ברוקר"],  # 7: 24/3
+            ["יהונתן פריאל", "אור הדר", "אריאל קרליך"],          # 8: 27/3
+        ],
+    },
+}
+
 
 def seed_rotation() -> None:
     with get_conn() as conn:
@@ -478,6 +527,55 @@ try:
     _log.info("migrate_rotation_v6: OK")
 except Exception:
     _log.error("migrate_rotation_v6 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v7() -> None:
+    """מיגרציה חד-פעמית: מעבר ל-9 slots — כל תקופה עם שיבוץ עצמאי."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v7_migrated'"
+        ).fetchone()
+        if already:
+            return
+        conn.execute(_q("UPDATE rotation_config SET start_date='2026-03-08' WHERE id=1"))
+        for role_name, slots in _ROTATION_9SLOTS["roles"].items():
+            role = conn.execute(
+                _q("SELECT id FROM rotation_roles WHERE name=?"), (role_name,)
+            ).fetchone()
+            if not role:
+                continue
+            role_id = role["id"]
+            for slot_num, names in enumerate(slots):
+                existing = conn.execute(
+                    _q("SELECT id FROM rotation_slots WHERE role_id=? AND slot_num=?"),
+                    (role_id, slot_num),
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        _q("UPDATE rotation_slots SET names=? WHERE role_id=? AND slot_num=?"),
+                        (_json.dumps(names, ensure_ascii=False), role_id, slot_num),
+                    )
+                else:
+                    conn.execute(
+                        _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                        (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+                    )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v7_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('rotation_v7_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v7()
+    _log.info("migrate_rotation_v7: OK")
+except Exception:
+    _log.error("migrate_rotation_v7 FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
@@ -1195,7 +1293,7 @@ def _build_rotation_response(conn) -> dict:
             "id": r["id"],
             "name": r["name"],
             "position": r["position"],
-            "slots": [s.get(i, []) for i in range(3)],
+            "slots": [s.get(i, []) for i in range(9)],
         })
     return {
         "start_date": cfg["start_date"] if cfg else "2025-03-08",
@@ -1243,7 +1341,7 @@ def add_rotation_role(body: RotationRoleCreateBody):
                 (body.name, pos),
             )
             role_id = cur.lastrowid
-        for slot_num in range(3):
+        for slot_num in range(9):
             conn.execute(
                 _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
                 (role_id, slot_num, "[]"),
@@ -1280,8 +1378,8 @@ def delete_rotation_role(role_id: int):
 
 @app.put("/api/rotation/roles/{role_id}/slots")
 def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
-    if len(body.slots) != 3:
-        raise HTTPException(400, "Must provide exactly 3 slots")
+    if len(body.slots) != 9:
+        raise HTTPException(400, "Must provide exactly 9 slots")
     with get_conn() as conn:
         row = conn.execute(_q("SELECT id FROM rotation_roles WHERE id=?"), (role_id,)).fetchone()
         if not row:
