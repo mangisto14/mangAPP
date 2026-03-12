@@ -218,10 +218,10 @@ except Exception:
 import json as _json
 
 _DEFAULT_ROTATION = {
-    "start_date": "2026-03-08",
+    "start_date": "2025-03-08",
     "period_days": 2,
-    # מחזור 7-ימי: ו-א (ראשון+שני 2י), א-ג (שלישי-חמישי 3י), ג-ה (שישי+שבת 2י)
-    # slot[0]=ו-א, slot[1]=ג-ה, slot[2]=א-ג  (נוסחה: ((1-שבוע-תקופה)%3+3)%3)
+    # מחזור 7-ימי: א-ג (ראשון+שני 2י), ג-ה (שלישי+רביעי 2י, חמישי=חזרה), ו-א (שישי+שבת 2י)
+    # slot[0]=א-ג, slot[1]=ג-ה, slot[2]=ו-א  (נוסחה: ((1-שבוע-תקופה)%3+3)%3)
     "roles": [
         {"name": "קצינים",  "slots": [["טל"], ["שלמה"], ["זיו"]]},
         {"name": "מפקדים", "slots": [["יוסף"], ["אביתר"], ["בועז"]]},
@@ -364,7 +364,7 @@ except Exception:
 
 
 def migrate_rotation_v4() -> None:
-    """מיגרציה חד-פעמית: תיקון start_date ל-2026 + גיל ש → גיל שמואל בפקחים."""
+    """מיגרציה חד-פעמית: גיל ש → גיל שמואל בפקחים + החזרת start_date ל-2025-03-08."""
     with get_conn() as conn:
         already = conn.execute(
             "SELECT value FROM settings WHERE key='rotation_v4_migrated'"
@@ -372,7 +372,7 @@ def migrate_rotation_v4() -> None:
         if already:
             return
         conn.execute(
-            _q("UPDATE rotation_config SET start_date='2026-03-08' WHERE start_date='2025-03-08'")
+            _q("UPDATE rotation_config SET start_date='2025-03-08' WHERE start_date='2026-03-08'")
         )
         role = conn.execute(
             _q("SELECT id FROM rotation_roles WHERE name='פקחים'")

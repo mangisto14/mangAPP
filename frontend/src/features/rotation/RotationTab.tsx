@@ -20,7 +20,7 @@ function fmtShort(d: Date): string {
 // Day-of-week starts: א-ג=0(Sun), ג-ה=2(Tue), ו-א=5(Fri)
 const PERIOD_CONFIG = [
   { label: "א-ג", days: 2, startDow: 0 },
-  { label: "ג-ה", days: 3, startDow: 2 },
+  { label: "ג-ה", days: 2, startDow: 2 },
   { label: "ו-א", days: 2, startDow: 5 },
 ] as const;
 
