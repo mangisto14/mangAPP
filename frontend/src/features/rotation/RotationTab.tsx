@@ -16,12 +16,12 @@ function fmtShort(d: Date): string {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-// 7-day cycle: [ו-א: Sun+Mon (2d), א-ג: Tue+Wed+Thu (3d), ג-ה: Fri+Sat (2d)]
-// Day-of-week starts: ו-א=0(Sun), א-ג=2(Tue), ג-ה=5(Fri)
+// 7-day cycle: [א-ג: Sun+Mon (2d), ג-ה: Tue+Wed+Thu (3d), ו-א: Fri+Sat (2d)]
+// Day-of-week starts: א-ג=0(Sun), ג-ה=2(Tue), ו-א=5(Fri)
 const PERIOD_CONFIG = [
-  { label: "ו-א", days: 2, startDow: 0 },
-  { label: "א-ג", days: 3, startDow: 2 },
-  { label: "ג-ה", days: 2, startDow: 5 },
+  { label: "א-ג", days: 2, startDow: 0 },
+  { label: "ג-ה", days: 3, startDow: 2 },
+  { label: "ו-א", days: 2, startDow: 5 },
 ] as const;
 
 /** slotIndex = ((1 - weekNum - periodInWeek) % 3 + 3) % 3 */
@@ -63,7 +63,7 @@ function buildPeriods(config: RotationConfig, weekOffset: number): RotationPerio
         start,
         end,
         slotIndex,
-        label: `${fmtShort(start)}-${fmtShort(end)}`,
+        label: `${fmtShort(start)}-${fmtShort(addDays(start, 2))}`,
         periodLabel: pc.label,
         isActive,
       });
