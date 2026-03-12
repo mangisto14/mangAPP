@@ -408,6 +408,36 @@ except Exception:
     _log.error("migrate_rotation_v4 FAILED:\n%s", traceback.format_exc())
 
 
+def migrate_rotation_v5() -> None:
+    """מיגרציה חד-פעמית: החזרת start_date ל-2025-03-08 (תיקון v4 שרץ בטעות)."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v5_migrated'"
+        ).fetchone()
+        if already:
+            return
+        conn.execute(
+            _q("UPDATE rotation_config SET start_date='2025-03-08'")
+        )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v5_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v5_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v5()
+    _log.info("migrate_rotation_v5: OK")
+except Exception:
+    _log.error("migrate_rotation_v5 FAILED:\n%s", traceback.format_exc())
+
+
 # ── Seed ──────────────────────────────────────────────────────────────────────
 def seed_db() -> None:
     shifts = [
