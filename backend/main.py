@@ -226,7 +226,7 @@ _DEFAULT_ROTATION = {
         {"name": "קצינים",  "slots": [["טל"], ["שלמה"], ["זיו"]]},
         {"name": "מפקדים", "slots": [["יוסף"], ["אביתר"], ["בועז"]]},
         {"name": "פקחים",  "slots": [
-            ["שי כהן", "בוחניק", "עוז", "חי מגנזי"],
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],
             ["דדון", "שלומי", "טלקר", "ביטון"],
             ["חן", "גיל שמואל", "ירין"],
         ]},
@@ -436,6 +436,48 @@ try:
     _log.info("migrate_rotation_v5: OK")
 except Exception:
     _log.error("migrate_rotation_v5 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v6() -> None:
+    """מיגרציה חד-פעמית: בוחניק → גיל בוחניק בפקחים slot[0]."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v6_migrated'"
+        ).fetchone()
+        if already:
+            return
+        role = conn.execute(
+            _q("SELECT id FROM rotation_roles WHERE name='פקחים'")
+        ).fetchone()
+        if role:
+            slot = conn.execute(
+                _q("SELECT id, names FROM rotation_slots WHERE role_id=? AND slot_num=0"),
+                (role["id"],),
+            ).fetchone()
+            if slot:
+                names = _json.loads(slot["names"])
+                names = ["גיל בוחניק" if n == "בוחניק" else n for n in names]
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE id=?"),
+                    (_json.dumps(names, ensure_ascii=False), slot["id"]),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v6_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v6_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v6()
+    _log.info("migrate_rotation_v6: OK")
+except Exception:
+    _log.error("migrate_rotation_v6 FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
