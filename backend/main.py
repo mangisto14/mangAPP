@@ -218,7 +218,7 @@ except Exception:
 import json as _json
 
 _DEFAULT_ROTATION = {
-    "start_date": "2025-03-08",
+    "start_date": "2026-03-08",
     "period_days": 2,
     # מחזור 7-ימי: ו-א (ראשון+שני 2י), א-ג (שלישי-חמישי 3י), ג-ה (שישי+שבת 2י)
     # slot[0]=ו-א, slot[1]=ג-ה, slot[2]=א-ג  (נוסחה: ((1-שבוע-תקופה)%3+3)%3)
@@ -228,7 +228,7 @@ _DEFAULT_ROTATION = {
         {"name": "פקחים",  "slots": [
             ["שי כהן", "בוחניק", "עוז", "חי מגנזי"],
             ["דדון", "שלומי", "טלקר", "ביטון"],
-            ["חן", "גיל ש", "ירין"],
+            ["חן", "גיל שמואל", "ירין"],
         ]},
         {"name": "נהגים",  "slots": [["גיל", "עוז"], ["מתנאל", "נוני"], ["ישראל", "רומן"]]},
         {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["גל", "עמיר", "שלומי"], ["נדב", "לירן"]]},
@@ -361,6 +361,51 @@ try:
     _log.info("migrate_rotation_v3: OK")
 except Exception:
     _log.error("migrate_rotation_v3 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v4() -> None:
+    """מיגרציה חד-פעמית: תיקון start_date ל-2026 + גיל ש → גיל שמואל בפקחים."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v4_migrated'"
+        ).fetchone()
+        if already:
+            return
+        conn.execute(
+            _q("UPDATE rotation_config SET start_date='2026-03-08' WHERE start_date='2025-03-08'")
+        )
+        role = conn.execute(
+            _q("SELECT id FROM rotation_roles WHERE name='פקחים'")
+        ).fetchone()
+        if role:
+            slot = conn.execute(
+                _q("SELECT id, names FROM rotation_slots WHERE role_id=? AND slot_num=2"),
+                (role["id"],),
+            ).fetchone()
+            if slot:
+                names = _json.loads(slot["names"])
+                names = ["גיל שמואל" if n == "גיל ש" else n for n in names]
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE id=?"),
+                    (_json.dumps(names, ensure_ascii=False), slot["id"]),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v4_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v4_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v4()
+    _log.info("migrate_rotation_v4: OK")
+except Exception:
+    _log.error("migrate_rotation_v4 FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
