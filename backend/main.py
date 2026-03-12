@@ -1286,6 +1286,10 @@ def _build_rotation_response(conn) -> dict:
     slots_map: dict = {}
     for sl in slots_all:
         slots_map.setdefault(sl["role_id"], {})[sl["slot_num"]] = _json.loads(sl["names"])
+    # Dynamic slot count: use max slot_num across all roles (at least 9)
+    all_slot_nums = [sl["slot_num"] for sl in slots_all]
+    max_slots = max(all_slot_nums) + 1 if all_slot_nums else 9
+    max_slots = max(max_slots, 9)
     roles_out = []
     for r in roles:
         s = slots_map.get(r["id"], {})
@@ -1293,7 +1297,7 @@ def _build_rotation_response(conn) -> dict:
             "id": r["id"],
             "name": r["name"],
             "position": r["position"],
-            "slots": [s.get(i, []) for i in range(9)],
+            "slots": [s.get(i, []) for i in range(max_slots)],
         })
     return {
         "start_date": cfg["start_date"] if cfg else "2025-03-08",
@@ -1378,8 +1382,8 @@ def delete_rotation_role(role_id: int):
 
 @app.put("/api/rotation/roles/{role_id}/slots")
 def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
-    if len(body.slots) != 9:
-        raise HTTPException(400, "Must provide exactly 9 slots")
+    if len(body.slots) < 9:
+        raise HTTPException(400, "Must provide at least 9 slots")
     with get_conn() as conn:
         row = conn.execute(_q("SELECT id FROM rotation_roles WHERE id=?"), (role_id,)).fetchone()
         if not row:

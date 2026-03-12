@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Settings } from "lucide-react";
+import { Pencil, Settings, PlusCircle } from "lucide-react";
 import { getRotation, updateRotationSlots } from "./api";
 import type { RotationConfig } from "./types";
 import EditRotationModal from "./EditRotationModal";
@@ -40,10 +40,10 @@ interface Period {
 }
 
 /**
- * Compute the 9 periods of the current 3-week cycle.
- * slotIndex is simply the position within the cycle (0–8), with no modular rotation.
+ * Compute `count` periods starting from the current 3-week cycle.
+ * slotIndex = position in the flat list (0, 1, 2, …), no rotation modulo.
  */
-function computePeriods(startDate: string): Period[] {
+function computePeriods(startDate: string, count: number): Period[] {
   const origin = new Date(startDate + "T00:00:00");
   const now = new Date();
 
@@ -57,21 +57,24 @@ function computePeriods(startDate: string): Period[] {
   const cycleNumber = Math.max(0, Math.floor(daysSinceAnchor / 21));
   const cycleStart = addDays(anchor, cycleNumber * 21);
 
-  return Array.from({ length: 3 }, (_, w) =>
-    PERIOD_CONFIG.map((pc, p) => {
-      const start = addDays(addDays(cycleStart, w * 7), pc.startDow);
-      const end = addDays(start, 2);
-      return {
-        start,
-        end,
-        slotIndex: w * 3 + p,
-        label: `${fmtShort(start)}-${fmtShort(end)}`,
-        periodLabel: pc.label,
-        periodIndex: p,
-        isActive: now >= start && now < end,
-      };
-    })
-  ).flat();
+  const periods: Period[] = [];
+  for (let i = 0; i < count; i++) {
+    const w = Math.floor(i / 3);
+    const p = i % 3;
+    const pc = PERIOD_CONFIG[p];
+    const start = addDays(addDays(cycleStart, w * 7), pc.startDow);
+    const end = addDays(start, 2);
+    periods.push({
+      start,
+      end,
+      slotIndex: i,
+      label: `${fmtShort(start)}-${fmtShort(end)}`,
+      periodLabel: pc.label,
+      periodIndex: p,
+      isActive: now >= start && now < end,
+    });
+  }
+  return periods;
 }
 
 // ── EditPeriodModal ────────────────────────────────────────────────────────────
@@ -97,7 +100,8 @@ function EditPeriodModal({ config, period, onClose, onSaved }: EditPeriodProps) 
     setError("");
     try {
       for (const role of config.roles) {
-        const newSlots = Array.from({ length: 9 }, (_, i) => role.slots[i] ?? []);
+        const needed = Math.max(9, period.slotIndex + 1);
+        const newSlots = Array.from({ length: needed }, (_, i) => role.slots[i] ?? []);
         newSlots[period.slotIndex] = (values[role.id] ?? "")
           .split(",")
           .map((s) => s.trim())
@@ -168,6 +172,7 @@ export default function RotationTab() {
   const [error, setError] = useState("");
   const [editSlot, setEditSlot] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [extraWeeks, setExtraWeeks] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -186,7 +191,8 @@ export default function RotationTab() {
   if (loading) return <div className="fade-in text-center text-text-dim py-20">טוען...</div>;
   if (error || !config) return <div className="fade-in card border-danger/30 text-danger">{error || "שגיאה"}</div>;
 
-  const periods = computePeriods(config.start_date);
+  const numPeriods = 9 + extraWeeks * 3;
+  const periods = computePeriods(config.start_date, numPeriods);
   const activePeriod = periods.find((p) => p.isActive);
 
   return (
@@ -200,15 +206,34 @@ export default function RotationTab() {
             תקופה פעילה: {activePeriod.label} · {activePeriod.periodLabel}
           </div>
         ) : <div />}
-        <button
-          onClick={() => setShowSettings(true)}
-          className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
-                     rounded-xl text-sm font-semibold text-text-dim hover:text-text
-                     hover:border-primary/40 transition-all"
-        >
-          <Settings size={14} />
-          הגדרות
-        </button>
+        <div className="flex items-center gap-2">
+          {extraWeeks > 0 && (
+            <button
+              onClick={() => setExtraWeeks((n) => n - 1)}
+              className="text-xs text-text-dim bg-bg-card border border-bg-border px-3 py-1.5
+                         rounded-xl font-semibold hover:text-text hover:border-primary/40 transition-all"
+            >
+              הסר שבוע
+            </button>
+          )}
+          <button
+            onClick={() => setExtraWeeks((n) => n + 1)}
+            className="flex items-center gap-1.5 text-xs text-success bg-success/10 border border-success/25
+                       px-3 py-1.5 rounded-xl font-semibold hover:bg-success/20 transition-all"
+          >
+            <PlusCircle size={14} />
+            הוסף שבוע
+          </button>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
+                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
+                       hover:border-primary/40 transition-all"
+          >
+            <Settings size={14} />
+            הגדרות
+          </button>
+        </div>
       </div>
 
       {/* Legend */}
