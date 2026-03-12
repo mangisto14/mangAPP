@@ -211,11 +211,14 @@ export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [error, setError] = useState("");
   const [view, setView] = useState<"now" | "history">("now");
   const [search, setSearch] = useState("");
   const [pendingLeave, setPendingLeave] = useState<{ id: number; name: string } | null>(null);
+  const [pendingBulkLeave, setPendingBulkLeave] = useState(false);
   const [settings, setSettings] = useState<Settings>({ alert_minutes: null });
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // tick to re-evaluate alert state every 30s
   const [, setTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -238,6 +241,18 @@ export default function AbsencesTab() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [load]);
 
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
   async function doAction(fn: () => Promise<unknown>, guardId: number) {
     setBusy(guardId);
     setError("");
@@ -251,6 +266,38 @@ export default function AbsencesTab() {
     }
   }
 
+  async function doBulkReturn() {
+    const ids = [...selectedIds].filter((id) => absences.find((a) => a.guard_id === id && a.is_out));
+    if (!ids.length) return;
+    setBulkBusy(true);
+    setError("");
+    try {
+      await Promise.all(ids.map((id) => markReturn(id)));
+      clearSelection();
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function doBulkLeave(reason: string | undefined) {
+    const ids = [...selectedIds].filter((id) => absences.find((a) => a.guard_id === id && !a.is_out));
+    if (!ids.length) return;
+    setBulkBusy(true);
+    setError("");
+    try {
+      await Promise.all(ids.map((id) => markLeave(id, reason)));
+      clearSelection();
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const out = absences.filter((a) => a.is_out);
   const inside = absences.filter((a) => !a.is_out);
   const filteredInside = search
@@ -258,6 +305,11 @@ export default function AbsencesTab() {
     : inside;
 
   const alertOut = out.filter((a) => a.left_at && isOverAlert(a.left_at, settings.alert_minutes));
+
+  // derive bulk action counts
+  const selectedOutCount = [...selectedIds].filter((id) => out.some((a) => a.guard_id === id)).length;
+  const selectedInCount  = [...selectedIds].filter((id) => inside.some((a) => a.guard_id === id)).length;
+  const hasSelection = selectedIds.size > 0;
 
   if (loading) return <p className="text-center text-text-dim mt-10">טוען...</p>;
 
@@ -310,13 +362,21 @@ export default function AbsencesTab() {
               <ul className="space-y-3">
                 {out.map((a) => {
                   const alert = a.left_at ? isOverAlert(a.left_at, settings.alert_minutes) : false;
+                  const checked = selectedIds.has(a.guard_id);
                   return (
                     <li
                       key={a.guard_id}
-                      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-3 slide-in
-                        ${alert ? "bg-danger/10 border border-danger/30" : "bg-bg-base"}`}
+                      className={`flex items-center gap-2 rounded-xl px-3 py-3 slide-in
+                        ${alert ? "bg-danger/10 border border-danger/30" : "bg-bg-base"}
+                        ${checked ? "ring-2 ring-primary/50" : ""}`}
                     >
-                      <div className="flex flex-col gap-0.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelect(a.guard_id)}
+                        className="w-4 h-4 accent-primary shrink-0"
+                      />
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-text">{a.name}</span>
                           {a.reason && (
@@ -380,35 +440,84 @@ export default function AbsencesTab() {
               </p>
             ) : (
               <ul className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredInside.map((a) => (
-                  <li
-                    key={a.guard_id}
-                    className="flex items-center justify-between gap-2 bg-bg-base rounded-xl px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-text">{a.name}</span>
-                      {a.total_exits > 0 && (
-                        <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
-                          {a.total_exits} יציאות
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      className="btn-danger text-xs px-3 py-1.5"
-                      disabled={busy === a.guard_id}
-                      onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                {filteredInside.map((a) => {
+                  const checked = selectedIds.has(a.guard_id);
+                  return (
+                    <li
+                      key={a.guard_id}
+                      className={`flex items-center gap-2 bg-bg-base rounded-xl px-3 py-2
+                        ${checked ? "ring-2 ring-primary/50" : ""}`}
                     >
-                      יצא 🚪
-                    </button>
-                  </li>
-                ))}
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelect(a.guard_id)}
+                        className="w-4 h-4 accent-primary shrink-0"
+                      />
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="font-medium text-text">{a.name}</span>
+                        {a.total_exits > 0 && (
+                          <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
+                            {a.total_exits} יציאות
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        className="btn-danger text-xs px-3 py-1.5 shrink-0"
+                        disabled={busy === a.guard_id}
+                        onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                      >
+                        יצא 🚪
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         </>
       )}
 
-      {/* Reason Sheet */}
+      {/* ── Bulk action bar ── */}
+      {hasSelection && view === "now" && (
+        <div
+          className="fixed bottom-16 inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
+          dir="rtl"
+        >
+          <div className="bg-bg-card border border-bg-border rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3 pointer-events-auto slide-in">
+            <span className="text-sm font-bold text-text">
+              נבחרו {selectedIds.size}
+            </span>
+            <div className="w-px h-5 bg-bg-border" />
+            {selectedInCount > 0 && (
+              <button
+                className="btn-danger text-xs px-3 py-1.5"
+                disabled={bulkBusy}
+                onClick={() => setPendingBulkLeave(true)}
+              >
+                יצאו ({selectedInCount}) 🚪
+              </button>
+            )}
+            {selectedOutCount > 0 && (
+              <button
+                className="btn-primary text-xs px-3 py-1.5"
+                disabled={bulkBusy}
+                onClick={doBulkReturn}
+              >
+                חזרו ({selectedOutCount}) ✅
+              </button>
+            )}
+            <button
+              className="text-text-dim hover:text-text text-sm px-1"
+              onClick={clearSelection}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Single Reason Sheet */}
       {pendingLeave && (
         <ReasonSheet
           name={pendingLeave.name}
@@ -418,6 +527,18 @@ export default function AbsencesTab() {
             doAction(() => markLeave(id, reason), id);
           }}
           onCancel={() => setPendingLeave(null)}
+        />
+      )}
+
+      {/* Bulk Reason Sheet */}
+      {pendingBulkLeave && (
+        <ReasonSheet
+          name={`${selectedInCount} אנשים`}
+          onSelect={(reason) => {
+            setPendingBulkLeave(false);
+            doBulkLeave(reason);
+          }}
+          onCancel={() => setPendingBulkLeave(false)}
         />
       )}
     </div>
