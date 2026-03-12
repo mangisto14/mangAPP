@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ShiftsTab from "./components/ShiftsTab";
-import AddShiftTab from "./components/AddShiftTab";
 import GuardsTab from "./components/GuardsTab";
 import StatsTab from "./components/StatsTab";
 import PinScreen from "./components/PinScreen";
 import AbsencesTab from "./features/absences/AbsencesTab";
+import RotationTab from "./features/rotation/RotationTab";
+import ScheduleTab from "./components/ScheduleTab";
 import { getSettings, updateSettings } from "./features/absences/api";
+import { useTheme } from "./hooks/useTheme";
 
 const TABS = [
   { id: "shifts",   icon: "📋", label: "משמרות"    },
   { id: "absences", icon: "🚪", label: "יציאות"    },
-  { id: "add",      icon: "➕", label: "הוסף"      },
-  { id: "guards",   icon: "👥", label: "שומרים"    },
+  { id: "rotation", icon: "🔄", label: "סבב"       },
+  { id: "schedule", icon: "📅", label: "לוח"       },
+  { id: "guards",   icon: "👥", label: "כוח אדם"   },
   { id: "stats",    icon: "📊", label: "סטטיסטיקה" },
 ] as const;
 
@@ -47,7 +50,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           <label className="text-sm font-semibold text-text block mb-1">
             התרעה אחרי כמה דקות בחוץ?
           </label>
-          <p className="text-xs text-text-dim mb-2">ישלח התראה אדומה אם שומר בחוץ יותר מהזמן הנקוב. 0 = כבוי.</p>
+          <p className="text-xs text-text-dim mb-2">
+            שורה תהפוך אדומה אם שומר בחוץ יותר מהזמן הנקוב. 0 = כבוי.
+          </p>
           <div className="flex gap-2">
             <input
               type="number"
@@ -74,22 +79,42 @@ export default function App() {
   const [tab, setTab] = useState<TabId>("shifts");
   const [pinReady, setPinReady] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const { theme, toggle: toggleTheme } = useTheme();
+
+  // PWA install prompt
+  const deferredPrompt = useRef<any>(null);
+  const [showInstall, setShowInstall] = useState(false);
 
   useEffect(() => {
-    // If already verified in this session, skip PIN
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt.current = e;
+      setShowInstall(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    const prompt = deferredPrompt.current;
+    if (!prompt) return;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === "accepted") {
+      deferredPrompt.current = null;
+      setShowInstall(false);
+    }
+  };
+
+  // PIN gate
+  useEffect(() => {
     if (sessionStorage.getItem("pin_ok") === "1") {
       setPinReady(true);
       return;
     }
-    fetch("/api/pin/required")
+    fetch((import.meta.env.VITE_API_URL ?? "") + "/api/pin/required")
       .then((r) => r.json())
-      .then((d) => {
-        if (!d.required) {
-          setPinReady(true);
-        } else {
-          setPinReady(false);
-        }
-      })
+      .then((d) => setPinReady(!d.required))
       .catch(() => setPinReady(true));
   }, []);
 
@@ -105,21 +130,57 @@ export default function App() {
             <h1 className="text-lg font-bold text-text">מצבת כוח</h1>
             <p className="text-xs text-text-dim">ניהול מצבת כוח</p>
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors"
-            title="הגדרות"
-          >
-            ⚙️
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-lg"
+              title={theme === "dark" ? "מצב יום" : "מצב לילה"}
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+            {/* Settings */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors"
+              title="הגדרות"
+            >
+              ⚙️
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* PWA install banner */}
+      {showInstall && (
+        <div className="max-w-2xl mx-auto px-4 pt-3">
+          <div className="card border-primary/30 bg-primary/5 flex items-center gap-3 slide-in">
+            <span className="text-2xl shrink-0">🛡️</span>
+            <p className="flex-1 text-sm text-text font-medium">
+              הוסף מצבת כוח למסך הבית כאפליקציה
+            </p>
+            <button
+              onClick={handleInstall}
+              className="btn-primary text-xs px-3 py-1.5 shrink-0"
+            >
+              הוסף
+            </button>
+            <button
+              onClick={() => setShowInstall(false)}
+              className="text-text-dim hover:text-text p-1 shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 pt-5">
         {tab === "shifts"   && <ShiftsTab />}
         {tab === "absences" && <AbsencesTab />}
-        {tab === "add"      && <AddShiftTab onSaved={() => setTab("shifts")} />}
+        {tab === "rotation" && <RotationTab />}
+        {tab === "schedule" && <ScheduleTab />}
         {tab === "guards"   && <GuardsTab />}
         {tab === "stats"    && <StatsTab />}
       </main>

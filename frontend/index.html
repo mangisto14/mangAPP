@@ -17,6 +17,10 @@
     />
   </head>
   <body>
+    <!-- prevent flash of wrong theme on load -->
+    <script>
+      (function(){var t=localStorage.getItem("theme")||"dark";document.documentElement.setAttribute("data-theme",t);})();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

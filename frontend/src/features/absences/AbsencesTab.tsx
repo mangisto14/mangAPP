@@ -6,6 +6,7 @@ import {
 } from "./api";
 import type { AbsenceStatus, AbsenceHistory, Settings } from "./types";
 
+
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
 
 function fmtDuration(min: number): string {
@@ -15,13 +16,19 @@ function fmtDuration(min: number): string {
   return m > 0 ? `${h}ש' ${m}ד'` : `${h} שעות`;
 }
 
-function fmtDatetime(iso: string): string {
+function fmtDate(iso: string): string {
   try {
     const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
-    return d.toLocaleString("he-IL", {
-      day: "2-digit", month: "2-digit",
-      hour: "2-digit", minute: "2-digit",
-    });
+    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  } catch {
+    return iso;
+  }
+}
+
+function fmtTime(iso: string): string {
+  try {
+    const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
+    return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return iso;
   }
@@ -72,6 +79,24 @@ function ReasonSheet({
           ללא סיבה
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Floating Label Date Input ─────────────────────────────────────────────────
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative flex-1">
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input text-sm w-full pt-5 pb-1"
+      />
+      <span className={`absolute right-3 pointer-events-none transition-all duration-150 text-text-muted
+        ${value ? "top-1 text-[10px]" : "top-1/2 -translate-y-1/2 text-sm"}`}>
+        {label}
+      </span>
     </div>
   );
 }
@@ -130,51 +155,44 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
           </a>
         </div>
         <div className="flex gap-2">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="input flex-1 text-sm"
-            placeholder="מתאריך"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="input flex-1 text-sm"
-            placeholder="עד תאריך"
-          />
+          <DateInput label="מתאריך" value={dateFrom} onChange={setDateFrom} />
+          <DateInput label="עד תאריך" value={dateTo} onChange={setDateTo} />
         </div>
       </div>
 
       {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0 rounded-xl overflow-hidden">
         {loading ? (
           <p className="text-center text-text-dim py-6">טוען...</p>
         ) : rows.length === 0 ? (
           <p className="text-center text-text-dim py-6">אין רשומות</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh" }}>
+            <table className="text-sm w-full" style={{ minWidth: "520px" }}>
               <thead>
-                <tr className="border-b border-bg-border bg-bg-base">
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">שם</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">סיבה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">יציאה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">חזרה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">משך</th>
+                <tr>
+                  {["שם","סיבה","תאריך","יציאה","חזרה","משך"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap border-b border-bg-border bg-bg-base"
+                      style={{ position: "sticky", top: 0, zIndex: 10 }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-bg-border/50 hover:bg-bg-base/50">
-                    <td className="px-3 py-2 font-medium text-text">{r.name}</td>
-                    <td className="px-3 py-2 text-text-muted">{r.reason || "—"}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtDatetime(r.left_at)}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">
-                      {r.returned_at ? fmtDatetime(r.returned_at) : <span className="text-warning">בחוץ</span>}
+                    <td className="px-3 py-2 font-medium text-text whitespace-nowrap">{r.name}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.reason || "—"}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">{fmtDate(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">{fmtTime(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
+                      {r.returned_at ? fmtTime(r.returned_at) : <span className="text-warning">בחוץ</span>}
                     </td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
                       {r.duration_min != null ? fmtDuration(r.duration_min) : "—"}
                     </td>
                   </tr>

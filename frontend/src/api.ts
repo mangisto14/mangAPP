@@ -1,6 +1,6 @@
 import type { Guard, Shift, Stats, Suggestion, StagedShift } from "./types";
 
-const BASE = "/api";
+const BASE = (import.meta.env.VITE_API_URL ?? "") + "/api";
 
 async function req<T>(
   path: string,
@@ -38,8 +38,16 @@ export const deleteGuard = (id: number) =>
   req<{ ok: boolean }>(`/guards/${id}`, { method: "DELETE" });
 
 // Shifts
-export const getShifts = (filter: "all" | "future" | "past" = "all") =>
-  req<Shift[]>(`/shifts?filter=${filter}`);
+export const getShifts = (
+  filter: "all" | "future" | "past" = "all",
+  dateFrom?: string,
+  dateTo?: string,
+) => {
+  const params = new URLSearchParams({ filter });
+  if (dateFrom) params.set("date_from", dateFrom);
+  if (dateTo) params.set("date_to", dateTo);
+  return req<Shift[]>(`/shifts?${params}`);
+};
 export const addShifts = (shifts: StagedShift[]) =>
   req<{ ok: boolean; count: number }>("/shifts", {
     method: "POST",
