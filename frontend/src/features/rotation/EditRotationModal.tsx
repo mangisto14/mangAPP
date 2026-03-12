@@ -7,14 +7,16 @@ import {
   deleteRotationRole,
   updateRotationSlots,
 } from "./api";
+import GuardAutocomplete from "./GuardAutocomplete";
 
 interface Props {
   config: RotationConfig;
+  guardNames: string[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function EditRotationModal({ config, onClose, onSaved }: Props) {
+export default function EditRotationModal({ config, guardNames, onClose, onSaved }: Props) {
   const [startDate, setStartDate] = useState(config.start_date);
   const [periodDays, setPeriodDays] = useState(String(config.period_days));
   const [roles, setRoles] = useState<RotationRole[]>(
@@ -167,11 +169,10 @@ export default function EditRotationModal({ config, onClose, onSaved }: Props) {
                     <label className="text-xs text-text-dim mb-1 block">
                       תקופה {si + 1} · {periodLabels[si % 3]} (מופרד בפסיק)
                     </label>
-                    <input
+                    <GuardAutocomplete
                       value={(role.slots[si] ?? []).join(", ")}
-                      onChange={(e) => updateSlotText(ri, si, e.target.value)}
-                      placeholder="שם1, שם2, שם3"
-                      className="input text-sm w-full"
+                      onChange={(v) => updateSlotText(ri, si, v)}
+                      guardNames={guardNames}
                     />
                   </div>
                 );

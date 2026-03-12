@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Pencil, Settings, PlusCircle } from "lucide-react";
 import { getRotation, updateRotationSlots } from "./api";
+import { getGuards } from "../../api";
 import type { RotationConfig } from "./types";
 import EditRotationModal from "./EditRotationModal";
+import GuardAutocomplete from "./GuardAutocomplete";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -82,11 +84,12 @@ function computePeriods(startDate: string, count: number): Period[] {
 interface EditPeriodProps {
   config: RotationConfig;
   period: Period;
+  guardNames: string[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function EditPeriodModal({ config, period, onClose, onSaved }: EditPeriodProps) {
+function EditPeriodModal({ config, period, guardNames, onClose, onSaved }: EditPeriodProps) {
   const [values, setValues] = useState<Record<number, string>>(
     Object.fromEntries(
       config.roles.map((r) => [r.id, (r.slots[period.slotIndex] ?? []).join(", ")])
@@ -138,11 +141,10 @@ function EditPeriodModal({ config, period, onClose, onSaved }: EditPeriodProps) 
               <label className="text-sm font-bold text-text w-20 shrink-0 text-right">
                 {role.name}
               </label>
-              <input
+              <GuardAutocomplete
                 value={values[role.id] ?? ""}
-                onChange={(e) => setValues((prev) => ({ ...prev, [role.id]: e.target.value }))}
-                placeholder="שם1, שם2, שם3"
-                className="input text-sm flex-1"
+                onChange={(v) => setValues((prev) => ({ ...prev, [role.id]: v }))}
+                guardNames={guardNames}
               />
             </div>
           ))}
@@ -173,12 +175,16 @@ export default function RotationTab() {
   const [editSlot, setEditSlot] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [extraWeeks, setExtraWeeks] = useState(0);
+  const [guardNames, setGuardNames] = useState<string[]>([]);
+  const [showUnassigned, setShowUnassigned] = useState(false);
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      setConfig(await getRotation());
+      const [cfg, guards] = await Promise.all([getRotation(), getGuards()]);
+      setConfig(cfg);
+      setGuardNames(guards.map((g) => g.name));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -194,6 +200,15 @@ export default function RotationTab() {
   const numPeriods = 9 + extraWeeks * 3;
   const periods = computePeriods(config.start_date, numPeriods);
   const activePeriod = periods.find((p) => p.isActive);
+
+  // Compute unassigned guards
+  const assignedNames = new Set<string>();
+  for (const role of config.roles) {
+    for (const slot of role.slots) {
+      for (const name of slot) assignedNames.add(name);
+    }
+  }
+  const unassigned = guardNames.filter((n) => !assignedNames.has(n));
 
   return (
     <div className="fade-in space-y-4">
@@ -236,14 +251,46 @@ export default function RotationTab() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex gap-3 flex-wrap">
-        {PERIOD_CONFIG.map((pc, i) => (
-          <span key={i} className={`text-xs font-semibold px-3 py-1 rounded-full border ${PERIOD_COLORS[i]}`}>
-            {pc.label}
-          </span>
-        ))}
+      {/* Legend + unassigned button */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex gap-3 flex-wrap">
+          {PERIOD_CONFIG.map((pc, i) => (
+            <span key={i} className={`text-xs font-semibold px-3 py-1 rounded-full border ${PERIOD_COLORS[i]}`}>
+              {pc.label}
+            </span>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowUnassigned((v) => !v)}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all
+            ${unassigned.length > 0
+              ? "text-warning bg-warning/10 border-warning/25"
+              : "text-success bg-success/10 border-success/25"}`}
+        >
+          {unassigned.length > 0
+            ? `${unassigned.length} לא שובצו`
+            : "כולם שובצו ✓"}
+        </button>
       </div>
+
+      {/* Unassigned report */}
+      {showUnassigned && (
+        <div className="card slide-in">
+          <h3 className="font-semibold text-text text-sm mb-2">אנשים שלא שובצו לאף משבצת</h3>
+          {unassigned.length === 0 ? (
+            <p className="text-success text-sm">כל כוח האדם משובץ בסבב!</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {unassigned.map((name) => (
+                <span key={name} className="text-xs bg-warning/10 text-warning border border-warning/25
+                                            px-2.5 py-1 rounded-full font-medium">
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto -mx-4 px-4">
@@ -326,6 +373,7 @@ export default function RotationTab() {
         <EditPeriodModal
           config={config}
           period={periods[editSlot]}
+          guardNames={guardNames}
           onClose={() => setEditSlot(null)}
           onSaved={() => { setEditSlot(null); load(); }}
         />
@@ -335,6 +383,7 @@ export default function RotationTab() {
       {showSettings && (
         <EditRotationModal
           config={config}
+          guardNames={guardNames}
           onClose={() => setShowSettings(false)}
           onSaved={() => { setShowSettings(false); load(); }}
         />
