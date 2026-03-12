@@ -226,16 +226,16 @@ _DEFAULT_ROTATION = {
         {"name": "קצינים",  "slots": [["טל"], ["שלמה"], ["זיו"]]},
         {"name": "מפקדים", "slots": [["יוסף"], ["אביתר"], ["בועז"]]},
         {"name": "פקחים",  "slots": [
-            ["שי", "בוחניק", "עוז", "חי מגנזי"],
-            ["דדון", "שלומי", "תלקר", "ביטון"],
-            ["חן", "גיל", "ירין"],
+            ["שי כהן", "בוחניק", "עוז", "חי מגנזי"],
+            ["דדון", "שלומי", "טלקר", "ביטון"],
+            ["חן", "גיל ש", "ירין"],
         ]},
         {"name": "נהגים",  "slots": [["גיל", "עוז"], ["מתנאל", "נוני"], ["ישראל", "רומן"]]},
         {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["גל", "עמיר", "שלומי"], ["נדב", "לירן"]]},
         {"name": "עתודאים", "slots": [
-            ["יהונתן קפיטל", "אור הדר", "אריאל קרליך"],
+            ["שי שני", "דוד סויסה", "יובל מועלם"],
             ["רועי נגאוקר", "טל ברוקר", "מתן קזז", "תומר שמאי"],
-            ["שי שני", "דוד סויסה", "יובל מועלם", "תומר שמאי"],
+            ["יהונתן קפיטל", "אור הדר", "אריאל קרליך"],
         ]},
     ],
 }
@@ -321,6 +321,46 @@ try:
     _log.info("migrate_rotation_v2: OK")
 except Exception:
     _log.error("migrate_rotation_v2 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v3() -> None:
+    """מיגרציה חד-פעמית: תיקון שמות פקחים ועתודאים + החלפת slots עתודאים."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v3_migrated'"
+        ).fetchone()
+        if already:
+            return
+        for role_data in _DEFAULT_ROTATION["roles"]:
+            role = conn.execute(
+                _q("SELECT id FROM rotation_roles WHERE name=?"),
+                (role_data["name"],),
+            ).fetchone()
+            if not role:
+                continue
+            role_id = role["id"]
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE role_id=? AND slot_num=?"),
+                    (_json.dumps(names, ensure_ascii=False), role_id, slot_num),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v3_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v3_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v3()
+    _log.info("migrate_rotation_v3: OK")
+except Exception:
+    _log.error("migrate_rotation_v3 FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
