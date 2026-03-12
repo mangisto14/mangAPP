@@ -4,7 +4,8 @@ import {
   getAbsences, markLeave, markReturn, resetAbsence,
   getHistory, getSettings, historyCSVUrl,
 } from "./api";
-import type { AbsenceStatus, AbsenceHistory, Settings } from "./types";
+import type { AbsenceStatus, AbsenceHistory, Settings, AlertThreshold } from "./types";
+import type { AlertLevel } from "./Clock";
 
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
@@ -34,11 +35,21 @@ function fmtTime(iso: string): string {
   }
 }
 
-function isOverAlert(leftAt: string, alertMin: number | null): boolean {
-  if (!alertMin) return false;
+function getAlertLevel(leftAt: string, thresholds: AlertThreshold[]): AlertLevel {
+  if (!thresholds.length) return null;
   const diffMin = (Date.now() - new Date(leftAt.endsWith("Z") ? leftAt : leftAt + "Z").getTime()) / 60000;
-  return diffMin >= alertMin;
+  const sorted = [...thresholds].sort((a, b) => b.minutes - a.minutes);
+  for (const t of sorted) {
+    if (diffMin >= t.minutes) return t.level as AlertLevel;
+  }
+  return null;
 }
+
+const LEVEL_ROW: Record<NonNullable<AlertLevel>, string> = {
+  warning:  "bg-warning/10 border border-warning/30",
+  danger:   "bg-orange-400/10 border border-orange-400/30",
+  critical: "bg-danger/10 border border-danger/30",
+};
 
 // ── Reason Sheet ─────────────────────────────────────────────────────────────
 function ReasonSheet({
@@ -217,7 +228,7 @@ export default function AbsencesTab() {
   const [search, setSearch] = useState("");
   const [pendingLeave, setPendingLeave] = useState<{ id: number; name: string } | null>(null);
   const [pendingBulkLeave, setPendingBulkLeave] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ alert_minutes: null });
+  const [settings, setSettings] = useState<Settings>({ alert_minutes: null, alert_thresholds: [] });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // tick to re-evaluate alert state every 30s
   const [, setTick] = useState(0);
@@ -304,7 +315,7 @@ export default function AbsencesTab() {
     ? inside.filter((a) => a.name.includes(search))
     : inside;
 
-  const alertOut = out.filter((a) => a.left_at && isOverAlert(a.left_at, settings.alert_minutes));
+  const alertOut = out.filter((a) => a.left_at && getAlertLevel(a.left_at, settings.alert_thresholds) !== null);
 
   // derive bulk action counts
   const selectedOutCount = [...selectedIds].filter((id) => out.some((a) => a.guard_id === id)).length;
@@ -341,7 +352,7 @@ export default function AbsencesTab() {
           {alertOut.length > 0 && (
             <div className="card border-danger/40 bg-danger/10 slide-in">
               <p className="text-danger text-sm font-semibold">
-                ⚠️ {alertOut.map((a) => a.name).join(", ")} — מעל {settings.alert_minutes} דק' בחוץ!
+                ⚠️ {alertOut.map((a) => a.name).join(", ")} — חרגו מסף ההתראה!
               </p>
             </div>
           )}
@@ -361,13 +372,13 @@ export default function AbsencesTab() {
             ) : (
               <ul className="space-y-3">
                 {out.map((a) => {
-                  const alert = a.left_at ? isOverAlert(a.left_at, settings.alert_minutes) : false;
+                  const alertLevel = a.left_at ? getAlertLevel(a.left_at, settings.alert_thresholds) : null;
                   const checked = selectedIds.has(a.guard_id);
                   return (
                     <li
                       key={a.guard_id}
                       className={`flex items-center gap-2 rounded-xl px-3 py-3 slide-in
-                        ${alert ? "bg-danger/10 border border-danger/30" : "bg-bg-base"}
+                        ${alertLevel ? LEVEL_ROW[alertLevel] : "bg-bg-base"}
                         ${checked ? "ring-2 ring-primary/50" : ""}`}
                     >
                       <input
@@ -390,7 +401,7 @@ export default function AbsencesTab() {
                             </span>
                           )}
                         </div>
-                        {a.left_at && <Clock leftAt={a.left_at} alert={alert} />}
+                        {a.left_at && <Clock leftAt={a.left_at} level={alertLevel} />}
                       </div>
                       <div className="flex gap-2 shrink-0">
                         <button

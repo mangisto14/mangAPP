@@ -763,8 +763,14 @@ class AbsenceActionBody(BaseModel):
     guard_id: int
 
 
+class AlertThresholdItem(BaseModel):
+    minutes: int
+    level: str  # "warning" | "danger" | "critical"
+
+
 class SettingsBody(BaseModel):
     alert_minutes: Optional[int] = None
+    alert_thresholds: Optional[List[AlertThresholdItem]] = None
 
 
 class SeedAbsenceItem(BaseModel):
@@ -1064,25 +1070,37 @@ def get_settings():
     with get_conn() as conn:
         rows = conn.execute("SELECT key,value FROM settings").fetchall()
     s = {row["key"]: row["value"] for row in rows}
-    return {"alert_minutes": int(s["alert_minutes"]) if s.get("alert_minutes") else None}
+    thresholds = []
+    if s.get("alert_thresholds"):
+        try:
+            thresholds = _json.loads(s["alert_thresholds"])
+        except Exception:
+            thresholds = []
+    return {
+        "alert_minutes": int(s["alert_minutes"]) if s.get("alert_minutes") else None,
+        "alert_thresholds": thresholds,
+    }
+
+
+def _upsert_setting(conn, key: str, value: str):
+    if IS_PG:
+        conn.execute(
+            "INSERT INTO settings (key,value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            (key, value),
+        )
+    else:
+        conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)", (key, value))
 
 
 @app.post("/api/settings")
 def update_settings(body: SettingsBody):
     with get_conn() as conn:
         if body.alert_minutes is not None:
-            if IS_PG:
-                conn.execute(
-                    "INSERT INTO settings (key,value) VALUES ('alert_minutes',%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
-                    (str(body.alert_minutes),),
-                )
-            else:
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key,value) VALUES ('alert_minutes',?)",
-                    (str(body.alert_minutes),),
-                )
+            _upsert_setting(conn, "alert_minutes", str(body.alert_minutes))
         else:
             conn.execute("DELETE FROM settings WHERE key='alert_minutes'")
+        if body.alert_thresholds is not None:
+            _upsert_setting(conn, "alert_thresholds", _json.dumps([t.dict() for t in body.alert_thresholds]))
     return {"ok": True}
 
 

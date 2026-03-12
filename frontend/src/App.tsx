@@ -6,6 +6,7 @@ import PinScreen from "./components/PinScreen";
 import AbsencesTab from "./features/absences/AbsencesTab";
 import ScheduleTab from "./components/ScheduleTab";
 import { getSettings, updateSettings } from "./features/absences/api";
+import type { AlertThreshold } from "./features/absences/types";
 import { useTheme } from "./hooks/useTheme";
 
 const TABS = [
@@ -18,17 +19,35 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+const LEVEL_LABELS: Record<AlertThreshold["level"], string> = {
+  warning:  "🟡 אזהרה",
+  danger:   "🟠 סכנה",
+  critical: "🔴 קריטי",
+};
+
+const LEVEL_OPTIONS: AlertThreshold["level"][] = ["warning", "danger", "critical"];
+
 // ── Settings Modal ────────────────────────────────────────────────────────────
 function SettingsModal({ onClose }: { onClose: () => void }) {
-  const [alertMin, setAlertMin] = useState<string>("");
+  const [thresholds, setThresholds] = useState<AlertThreshold[]>([]);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    getSettings().then((s) => setAlertMin(s.alert_minutes ? String(s.alert_minutes) : ""));
+    getSettings().then((s) => setThresholds(s.alert_thresholds ?? []));
   }, []);
 
+  const add = () =>
+    setThresholds((prev) => [...prev, { minutes: 30, level: "warning" }]);
+
+  const remove = (i: number) =>
+    setThresholds((prev) => prev.filter((_, idx) => idx !== i));
+
+  const update = (i: number, patch: Partial<AlertThreshold>) =>
+    setThresholds((prev) => prev.map((t, idx) => idx === i ? { ...t, ...patch } : t));
+
   const save = async () => {
-    await updateSettings({ alert_minutes: alertMin ? Number(alertMin) : null });
+    const sorted = [...thresholds].sort((a, b) => a.minutes - b.minutes);
+    await updateSettings({ alert_thresholds: sorted });
     setSaved(true);
     setTimeout(() => { setSaved(false); onClose(); }, 800);
   };
@@ -44,24 +63,48 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} className="text-text-dim hover:text-text text-xl px-2">✕</button>
         </div>
 
-        <div>
-          <label className="text-sm font-semibold text-text block mb-1">
-            התרעה אחרי כמה דקות בחוץ?
-          </label>
-          <p className="text-xs text-text-dim mb-2">
-            שורה תהפוך אדומה אם שומר בחוץ יותר מהזמן הנקוב. 0 = כבוי.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min="0"
-              value={alertMin}
-              onChange={(e) => setAlertMin(e.target.value)}
-              placeholder="0 = ללא התראה"
-              className="input flex-1"
-            />
-            <span className="text-text-dim self-center text-sm">דקות</span>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-text">ספי התראה לפי זמן בחוץ</p>
+              <p className="text-xs text-text-dim mt-0.5">כל ספ משנה צבע את שורת השומר</p>
+            </div>
+            <button onClick={add} className="btn-ghost text-xs px-3 py-1.5">+ הוסף</button>
           </div>
+
+          {thresholds.length === 0 ? (
+            <p className="text-text-dim text-xs text-center py-3">אין ספי התראה — לחץ "הוסף"</p>
+          ) : (
+            <div className="space-y-2">
+              {thresholds.map((t, i) => (
+                <div key={i} className="flex items-center gap-2 bg-bg-base rounded-xl px-3 py-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={t.minutes}
+                    onChange={(e) => update(i, { minutes: Number(e.target.value) })}
+                    className="input w-20 text-sm text-center"
+                  />
+                  <span className="text-text-dim text-xs shrink-0">דק'</span>
+                  <select
+                    value={t.level}
+                    onChange={(e) => update(i, { level: e.target.value as AlertThreshold["level"] })}
+                    className="input flex-1 text-sm"
+                  >
+                    {LEVEL_OPTIONS.map((l) => (
+                      <option key={l} value={l}>{LEVEL_LABELS[l]}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => remove(i)}
+                    className="text-danger hover:opacity-70 text-sm px-1 shrink-0"
+                  >
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <button onClick={save} className="btn-primary w-full">
