@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Pencil, Settings, PlusCircle } from "lucide-react";
-import { getRotation, updateRotationSlots } from "./api";
+import { Pencil, Settings, PlusCircle, RefreshCw } from "lucide-react";
+import { getRotation, updateRotationSlots, syncRotationGuards } from "./api";
+import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
 import type { Guard } from "../../types";
 import type { RotationConfig } from "./types";
@@ -170,6 +171,86 @@ function EditPeriodModal({ config, period, guardNames, guards, onClose, onSaved 
   );
 }
 
+// ── SyncModal ──────────────────────────────────────────────────────────────────
+
+function SyncModal({ result, onClose }: { result: SyncResult; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
+      <div
+        className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in
+                   max-w-2xl mx-auto max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-bg-border shrink-0">
+          <h2 className="font-bold text-text text-lg">תוצאות סנכרון סבב ↔ כוח אדם</h2>
+          <button onClick={onClose} className="text-text-dim hover:text-text text-xl px-2">✕</button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+
+          {/* Updated */}
+          <div>
+            <h3 className="text-sm font-bold text-text mb-2 flex items-center gap-2">
+              <span className="text-success">✓</span>
+              {result.updated.length > 0
+                ? `${result.updated.length} אנשים עודכנו בכוח האדם`
+                : "לא עודכנו תפקידים"}
+            </h3>
+            {result.updated.length > 0 && (
+              <div className="space-y-1">
+                {result.updated.map((u) => (
+                  <div key={u.name} className="flex items-center gap-2 text-xs bg-success/10 border border-success/25 rounded-xl px-3 py-2">
+                    <span className="font-semibold text-text">{u.name}</span>
+                    <span className="text-text-dim">{u.old_role ?? "ללא תפקיד"}</span>
+                    <span className="text-text-dim">→</span>
+                    <span className="text-success font-semibold">{u.new_role}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Conflicts */}
+          {result.conflicts.length > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-warning mb-2 flex items-center gap-2">
+                <span>⚠</span> {result.conflicts.length} התנגשויות — שם מופיע בכמה תפקידים
+              </h3>
+              <div className="space-y-1">
+                {result.conflicts.map((c) => (
+                  <div key={c.name} className="text-xs bg-warning/10 border border-warning/25 rounded-xl px-3 py-2">
+                    <span className="font-semibold text-text">{c.name}</span>
+                    <span className="text-warning mr-2">{c.roles.join(", ")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Unknown in rotation */}
+          {result.unknown_in_rotation.length > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-text-dim mb-2 flex items-center gap-2">
+                <span>❓</span> {result.unknown_in_rotation.length} שמות בסבב שלא קיימים בכוח האדם
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {result.unknown_in_rotation.map((n) => (
+                  <span key={n} className="text-xs bg-bg-base border border-bg-border text-text-dim px-2.5 py-1 rounded-full">
+                    {n}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+        <div className="p-5 border-t border-bg-border shrink-0">
+          <button onClick={onClose} className="btn-primary w-full">סגור</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── RotationTab ───────────────────────────────────────────────────────────────
 
 export default function RotationTab() {
@@ -179,6 +260,8 @@ export default function RotationTab() {
   const [editSlot, setEditSlot] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [extraWeeks, setExtraWeeks] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [guardNames, setGuardNames] = useState<string[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
@@ -195,6 +278,19 @@ export default function RotationTab() {
       setError((e as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncRotationGuards();
+      setSyncResult(result);
+      load(); // refresh guards with updated roles
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -249,6 +345,17 @@ export default function RotationTab() {
           >
             <PlusCircle size={14} />
             הוסף שבוע
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
+                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
+                       hover:border-primary/40 transition-all disabled:opacity-50"
+            title="סנכרן תפקידים בין סבב לכוח אדם"
+          >
+            <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
+            סנכרן
           </button>
           <button
             onClick={() => setShowSettings(true)}
@@ -417,6 +524,11 @@ export default function RotationTab() {
           onClose={() => setShowSettings(false)}
           onSaved={() => { setShowSettings(false); load(); }}
         />
+      )}
+
+      {/* Sync result modal */}
+      {syncResult && (
+        <SyncModal result={syncResult} onClose={() => setSyncResult(null)} />
       )}
     </div>
   );

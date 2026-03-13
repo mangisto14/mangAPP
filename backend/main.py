@@ -901,6 +901,15 @@ def update_guard(guard_id: int, body: GuardUpdateBody):
                             _q("UPDATE shifts SET names=? WHERE id=?"),
                             (",".join(new_names), shift["id"]),
                         )
+                # Propagate name change to rotation_slots
+                for slot in conn.execute("SELECT id,names FROM rotation_slots").fetchall():
+                    names_list = _json.loads(slot["names"])
+                    if old_name in names_list:
+                        new_names_list = [body.name if n == old_name else n for n in names_list]
+                        conn.execute(
+                            _q("UPDATE rotation_slots SET names=? WHERE id=?"),
+                            (_json.dumps(new_names_list, ensure_ascii=False), slot["id"]),
+                        )
         except _IntegrityError:
             raise HTTPException(400, "Name already exists")
     return {"ok": True}
@@ -1413,6 +1422,69 @@ def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
                 (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
             )
     return {"ok": True}
+
+
+# ── Sync rotation ↔ guards ────────────────────────────────────────────────────
+
+@app.post("/api/sync/rotation-guards")
+def sync_rotation_guards():
+    """
+    Cross-reference rotation_slots ↔ guards:
+    1. Build name→role map from rotation slots
+    2. Update each guard's role if their name appears in rotation
+    3. Return summary: updated, conflicts (name in multiple roles), unknown (in rotation but not in guards)
+    """
+    with get_conn() as conn:
+        roles = conn.execute("SELECT id, name FROM rotation_roles").fetchall()
+        slots_all = conn.execute("SELECT role_id, names FROM rotation_slots").fetchall()
+        guards_all = conn.execute("SELECT id, name, role FROM guards").fetchall()
+
+        # Build name → [role_name, ...] map from rotation
+        name_to_roles: dict = {}
+        for slot in slots_all:
+            role_name = next((r["name"] for r in roles if r["id"] == slot["role_id"]), None)
+            if not role_name:
+                continue
+            for name in _json.loads(slot["names"]):
+                name = name.strip()
+                if not name:
+                    continue
+                name_to_roles.setdefault(name, set()).add(role_name)
+
+        guard_name_set = {g["name"] for g in guards_all}
+
+        # Names in rotation that don't exist in guards
+        unknown_in_rotation = [n for n in name_to_roles if n not in guard_name_set]
+
+        # Names appearing in multiple rotation roles (conflict)
+        conflicts = [
+            {"name": n, "roles": list(roles_set)}
+            for n, roles_set in name_to_roles.items()
+            if len(roles_set) > 1 and n in guard_name_set
+        ]
+        conflict_names = {c["name"] for c in conflicts}
+
+        # Update guards: only if name appears in exactly one rotation role
+        updated = []
+        for g in guards_all:
+            if g["name"] in name_to_roles and g["name"] not in conflict_names:
+                new_role = next(iter(name_to_roles[g["name"]]))
+                if g["role"] != new_role:
+                    conn.execute(
+                        _q("UPDATE guards SET role=? WHERE id=?"),
+                        (new_role, g["id"]),
+                    )
+                    updated.append({
+                        "name": g["name"],
+                        "old_role": g["role"],
+                        "new_role": new_role,
+                    })
+
+    return {
+        "updated": updated,
+        "conflicts": conflicts,
+        "unknown_in_rotation": unknown_in_rotation,
+    }
 
 
 # ── Schedule ──────────────────────────────────────────────────────────────────

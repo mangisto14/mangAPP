@@ -48,3 +48,15 @@ export async function updateRotationSlots(roleId: number, slots: string[][]) {
   });
   if (!r.ok) throw new Error("שגיאה בעדכון קבוצות");
 }
+
+export interface SyncResult {
+  updated: { name: string; old_role: string | null; new_role: string }[];
+  conflicts: { name: string; roles: string[] }[];
+  unknown_in_rotation: string[];
+}
+
+export async function syncRotationGuards(): Promise<SyncResult> {
+  const r = await fetch(`${BASE}/sync/rotation-guards`, { method: "POST" });
+  if (!r.ok) throw new Error("שגיאה בסנכרון");
+  return r.json();
+}
