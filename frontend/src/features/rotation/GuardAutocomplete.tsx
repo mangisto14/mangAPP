@@ -42,9 +42,10 @@ export default function GuardAutocomplete({ value, onChange, guardNames, guards,
   const existingNames = new Set(tokens.slice(0, -1).map((t) => t.trim()).filter(Boolean));
 
   // Filter candidates matching last token, exclude already-used
-  const candidates = lastToken.length > 0
-    ? guardNames.filter((n) => n.includes(lastToken) && !existingNames.has(n))
-    : [];
+  // When empty, show all (role-matching first via sort below)
+  const candidates = guardNames.filter(
+    (n) => (lastToken === "" || n.includes(lastToken)) && !existingNames.has(n)
+  );
 
   // Sort: matching role first
   let suggestions: string[];

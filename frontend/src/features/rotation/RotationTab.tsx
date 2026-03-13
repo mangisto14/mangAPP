@@ -361,19 +361,27 @@ export default function RotationTab() {
                         <div className="space-y-0.5">
                           {names.map((name) => {
                             const guardRole = guardRoleMap.get(name);
-                            const mismatch = guardRole !== undefined && guardRole !== role.name;
+                            const mismatch = guardRole !== undefined && guardRole !== null && guardRole !== role.name;
                             return (
                               <div
                                 key={name}
-                                className={`text-xs px-1.5 py-0.5 rounded-lg border font-medium flex items-center gap-1
+                                className={`text-xs px-1.5 py-0.5 rounded-lg border font-medium
                                   ${mismatch
                                     ? "bg-warning/10 border-warning/30 text-warning"
                                     : PERIOD_COLORS[p.periodIndex]
                                   }`}
                                 title={mismatch ? `תפקיד אמיתי: ${guardRole || "ללא תפקיד"}` : undefined}
                               >
-                                {mismatch && <span className="text-[9px]">⚠</span>}
-                                {name}
+                                <div className="flex items-center gap-0.5">
+                                  {mismatch && <span className="text-[9px]">⚠</span>}
+                                  <span>{name}</span>
+                                </div>
+                                {guardRole && (
+                                  <span className={`text-[9px] opacity-60 block leading-tight
+                                    ${mismatch ? "text-warning" : ""}`}>
+                                    {guardRole}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
