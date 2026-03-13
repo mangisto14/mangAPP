@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Settings, PlusCircle } from "lucide-react";
 import { getRotation, updateRotationSlots } from "./api";
 import { getGuards } from "../../api";
+import type { Guard } from "../../types";
 import type { RotationConfig } from "./types";
 import EditRotationModal from "./EditRotationModal";
 import GuardAutocomplete from "./GuardAutocomplete";
@@ -85,11 +86,12 @@ interface EditPeriodProps {
   config: RotationConfig;
   period: Period;
   guardNames: string[];
+  guards: Guard[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function EditPeriodModal({ config, period, guardNames, onClose, onSaved }: EditPeriodProps) {
+function EditPeriodModal({ config, period, guardNames, guards, onClose, onSaved }: EditPeriodProps) {
   const [values, setValues] = useState<Record<number, string>>(
     Object.fromEntries(
       config.roles.map((r) => [r.id, (r.slots[period.slotIndex] ?? []).join(", ")])
@@ -137,14 +139,16 @@ function EditPeriodModal({ config, period, guardNames, onClose, onSaved }: EditP
         {/* Role inputs */}
         <div className="overflow-y-auto flex-1 p-5 space-y-3">
           {config.roles.map((role) => (
-            <div key={role.id} className="flex items-center gap-3">
-              <label className="text-sm font-bold text-text w-20 shrink-0 text-right">
+            <div key={role.id} className="flex items-start gap-3">
+              <label className="text-sm font-bold text-text w-20 shrink-0 text-right pt-2">
                 {role.name}
               </label>
               <GuardAutocomplete
                 value={values[role.id] ?? ""}
                 onChange={(v) => setValues((prev) => ({ ...prev, [role.id]: v }))}
                 guardNames={guardNames}
+                guards={guards}
+                roleFilter={role.name}
               />
             </div>
           ))}
@@ -176,15 +180,17 @@ export default function RotationTab() {
   const [showSettings, setShowSettings] = useState(false);
   const [extraWeeks, setExtraWeeks] = useState(0);
   const [guardNames, setGuardNames] = useState<string[]>([]);
+  const [guards, setGuards] = useState<Guard[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [cfg, guards] = await Promise.all([getRotation(), getGuards()]);
+      const [cfg, guardList] = await Promise.all([getRotation(), getGuards()]);
       setConfig(cfg);
-      setGuardNames(guards.map((g) => g.name));
+      setGuards(guardList);
+      setGuardNames(guardList.map((g) => g.name));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -200,6 +206,11 @@ export default function RotationTab() {
   const numPeriods = 9 + extraWeeks * 3;
   const periods = computePeriods(config.start_date, numPeriods);
   const activePeriod = periods.find((p) => p.isActive);
+
+  // Build name → role map for mismatch detection
+  const guardRoleMap = new Map<string, string | null>(
+    guards.map((g) => [g.name, g.role])
+  );
 
   // Compute unassigned guards
   const assignedNames = new Set<string>();
@@ -348,15 +359,24 @@ export default function RotationTab() {
                         <span className="text-text-dim/30 text-xs">—</span>
                       ) : (
                         <div className="space-y-0.5">
-                          {names.map((name) => (
-                            <div
-                              key={name}
-                              className={`text-xs px-1.5 py-0.5 rounded-lg border font-medium
-                                ${PERIOD_COLORS[p.periodIndex]}`}
-                            >
-                              {name}
-                            </div>
-                          ))}
+                          {names.map((name) => {
+                            const guardRole = guardRoleMap.get(name);
+                            const mismatch = guardRole !== undefined && guardRole !== role.name;
+                            return (
+                              <div
+                                key={name}
+                                className={`text-xs px-1.5 py-0.5 rounded-lg border font-medium flex items-center gap-1
+                                  ${mismatch
+                                    ? "bg-warning/10 border-warning/30 text-warning"
+                                    : PERIOD_COLORS[p.periodIndex]
+                                  }`}
+                                title={mismatch ? `תפקיד אמיתי: ${guardRole || "ללא תפקיד"}` : undefined}
+                              >
+                                {mismatch && <span className="text-[9px]">⚠</span>}
+                                {name}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </td>
@@ -374,6 +394,7 @@ export default function RotationTab() {
           config={config}
           period={periods[editSlot]}
           guardNames={guardNames}
+          guards={guards}
           onClose={() => setEditSlot(null)}
           onSaved={() => { setEditSlot(null); load(); }}
         />
@@ -384,6 +405,7 @@ export default function RotationTab() {
         <EditRotationModal
           config={config}
           guardNames={guardNames}
+          guards={guards}
           onClose={() => setShowSettings(false)}
           onSaved={() => { setShowSettings(false); load(); }}
         />

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Trash2, Plus } from "lucide-react";
+import type { Guard } from "../../types";
 import type { RotationConfig, RotationRole } from "./types";
 import {
   updateRotationConfig,
@@ -12,11 +13,12 @@ import GuardAutocomplete from "./GuardAutocomplete";
 interface Props {
   config: RotationConfig;
   guardNames: string[];
+  guards?: Guard[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function EditRotationModal({ config, guardNames, onClose, onSaved }: Props) {
+export default function EditRotationModal({ config, guardNames, guards, onClose, onSaved }: Props) {
   const [startDate, setStartDate] = useState(config.start_date);
   const [periodDays, setPeriodDays] = useState(String(config.period_days));
   const [roles, setRoles] = useState<RotationRole[]>(
@@ -173,6 +175,8 @@ export default function EditRotationModal({ config, guardNames, onClose, onSaved
                       value={(role.slots[si] ?? []).join(", ")}
                       onChange={(v) => updateSlotText(ri, si, v)}
                       guardNames={guardNames}
+                      guards={guards}
+                      roleFilter={role.name}
                     />
                   </div>
                 );
