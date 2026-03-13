@@ -5,6 +5,7 @@ import StatsTab from "./components/StatsTab";
 import PinScreen from "./components/PinScreen";
 import AbsencesTab from "./features/absences/AbsencesTab";
 import ScheduleTab from "./components/ScheduleTab";
+import RotationTab from "./features/rotation/RotationTab";
 import { getSettings, updateSettings } from "./features/absences/api";
 import type { AlertThreshold } from "./features/absences/types";
 import { useTheme } from "./hooks/useTheme";
@@ -12,6 +13,7 @@ import { useTheme } from "./hooks/useTheme";
 const TABS = [
   { id: "shifts",   icon: "📋", label: "משמרות"    },
   { id: "absences", icon: "🚪", label: "יציאות"    },
+  { id: "rotation", icon: "🔄", label: "סבב"       },
   { id: "schedule", icon: "📅", label: "לוח"       },
   { id: "guards",   icon: "👥", label: "כוח אדם"   },
   { id: "stats",    icon: "📊", label: "סטטיסטיקה" },
@@ -220,6 +222,7 @@ export default function App() {
       <main className="max-w-2xl mx-auto px-4 pt-5">
         {tab === "shifts"   && <ShiftsTab />}
         {tab === "absences" && <AbsencesTab />}
+        {tab === "rotation" && <RotationTab />}
         {tab === "schedule" && <ScheduleTab />}
         {tab === "guards"   && <GuardsTab />}
         {tab === "stats"    && <StatsTab />}
