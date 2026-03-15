@@ -4,7 +4,9 @@ import {
   getAbsences, markLeave, markReturn, resetAbsence,
   getHistory, getSettings, historyCSVUrl,
 } from "./api";
-import type { AbsenceStatus, AbsenceHistory, Settings } from "./types";
+import type { AbsenceStatus, AbsenceHistory, Settings, AlertThreshold } from "./types";
+import type { AlertLevel } from "./Clock";
+
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
 
@@ -15,23 +17,39 @@ function fmtDuration(min: number): string {
   return m > 0 ? `${h}ש' ${m}ד'` : `${h} שעות`;
 }
 
-function fmtDatetime(iso: string): string {
+function fmtDate(iso: string): string {
   try {
     const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
-    return d.toLocaleString("he-IL", {
-      day: "2-digit", month: "2-digit",
-      hour: "2-digit", minute: "2-digit",
-    });
+    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
   } catch {
     return iso;
   }
 }
 
-function isOverAlert(leftAt: string, alertMin: number | null): boolean {
-  if (!alertMin) return false;
-  const diffMin = (Date.now() - new Date(leftAt.endsWith("Z") ? leftAt : leftAt + "Z").getTime()) / 60000;
-  return diffMin >= alertMin;
+function fmtTime(iso: string): string {
+  try {
+    const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
+    return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return iso;
+  }
 }
+
+function getAlertLevel(leftAt: string, thresholds: AlertThreshold[]): AlertLevel {
+  if (!thresholds.length) return null;
+  const diffMin = (Date.now() - new Date(leftAt.endsWith("Z") ? leftAt : leftAt + "Z").getTime()) / 60000;
+  const sorted = [...thresholds].sort((a, b) => b.minutes - a.minutes);
+  for (const t of sorted) {
+    if (diffMin >= t.minutes) return t.level as AlertLevel;
+  }
+  return null;
+}
+
+const LEVEL_ROW: Record<NonNullable<AlertLevel>, string> = {
+  warning:  "bg-warning/10 border border-warning/30",
+  danger:   "bg-orange-400/10 border border-orange-400/30",
+  critical: "bg-danger/10 border border-danger/30",
+};
 
 // ── Reason Sheet ─────────────────────────────────────────────────────────────
 function ReasonSheet({
@@ -72,6 +90,24 @@ function ReasonSheet({
           ללא סיבה
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Floating Label Date Input ─────────────────────────────────────────────────
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative flex-1">
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input text-sm w-full pt-5 pb-1"
+      />
+      <span className={`absolute right-3 pointer-events-none transition-all duration-150 text-text-muted
+        ${value ? "top-1 text-[10px]" : "top-1/2 -translate-y-1/2 text-sm"}`}>
+        {label}
+      </span>
     </div>
   );
 }
@@ -130,51 +166,44 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
           </a>
         </div>
         <div className="flex gap-2">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="input flex-1 text-sm"
-            placeholder="מתאריך"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="input flex-1 text-sm"
-            placeholder="עד תאריך"
-          />
+          <DateInput label="מתאריך" value={dateFrom} onChange={setDateFrom} />
+          <DateInput label="עד תאריך" value={dateTo} onChange={setDateTo} />
         </div>
       </div>
 
       {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0 rounded-xl overflow-hidden">
         {loading ? (
           <p className="text-center text-text-dim py-6">טוען...</p>
         ) : rows.length === 0 ? (
           <p className="text-center text-text-dim py-6">אין רשומות</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "60vh" }}>
+            <table className="text-sm w-full" style={{ minWidth: "520px" }}>
               <thead>
-                <tr className="border-b border-bg-border bg-bg-base">
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">שם</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">סיבה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">יציאה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">חזרה</th>
-                  <th className="text-right px-3 py-2 font-semibold text-text-muted">משך</th>
+                <tr>
+                  {["שם","סיבה","תאריך","יציאה","חזרה","משך"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-right px-3 py-2 font-semibold text-text-muted whitespace-nowrap border-b border-bg-border bg-bg-base"
+                      style={{ position: "sticky", top: 0, zIndex: 10 }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-bg-border/50 hover:bg-bg-base/50">
-                    <td className="px-3 py-2 font-medium text-text">{r.name}</td>
-                    <td className="px-3 py-2 text-text-muted">{r.reason || "—"}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">{fmtDatetime(r.left_at)}</td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">
-                      {r.returned_at ? fmtDatetime(r.returned_at) : <span className="text-warning">בחוץ</span>}
+                    <td className="px-3 py-2 font-medium text-text whitespace-nowrap">{r.name}</td>
+                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">{r.reason || "—"}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">{fmtDate(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">{fmtTime(r.left_at)}</td>
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
+                      {r.returned_at ? fmtTime(r.returned_at) : <span className="text-warning">בחוץ</span>}
                     </td>
-                    <td className="px-3 py-2 text-text-muted tabular-nums">
+                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
                       {r.duration_min != null ? fmtDuration(r.duration_min) : "—"}
                     </td>
                   </tr>
@@ -193,11 +222,14 @@ export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [error, setError] = useState("");
   const [view, setView] = useState<"now" | "history">("now");
   const [search, setSearch] = useState("");
   const [pendingLeave, setPendingLeave] = useState<{ id: number; name: string } | null>(null);
-  const [settings, setSettings] = useState<Settings>({ alert_minutes: null });
+  const [pendingBulkLeave, setPendingBulkLeave] = useState(false);
+  const [settings, setSettings] = useState<Settings>({ alert_minutes: null, alert_thresholds: [] });
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // tick to re-evaluate alert state every 30s
   const [, setTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -220,6 +252,18 @@ export default function AbsencesTab() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [load]);
 
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
   async function doAction(fn: () => Promise<unknown>, guardId: number) {
     setBusy(guardId);
     setError("");
@@ -233,13 +277,50 @@ export default function AbsencesTab() {
     }
   }
 
+  async function doBulkReturn() {
+    const ids = [...selectedIds].filter((id) => absences.find((a) => a.guard_id === id && a.is_out));
+    if (!ids.length) return;
+    setBulkBusy(true);
+    setError("");
+    try {
+      await Promise.all(ids.map((id) => markReturn(id)));
+      clearSelection();
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function doBulkLeave(reason: string | undefined) {
+    const ids = [...selectedIds].filter((id) => absences.find((a) => a.guard_id === id && !a.is_out));
+    if (!ids.length) return;
+    setBulkBusy(true);
+    setError("");
+    try {
+      await Promise.all(ids.map((id) => markLeave(id, reason)));
+      clearSelection();
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const out = absences.filter((a) => a.is_out);
   const inside = absences.filter((a) => !a.is_out);
   const filteredInside = search
     ? inside.filter((a) => a.name.includes(search))
     : inside;
 
-  const alertOut = out.filter((a) => a.left_at && isOverAlert(a.left_at, settings.alert_minutes));
+  const alertOut = out.filter((a) => a.left_at && getAlertLevel(a.left_at, settings.alert_thresholds) !== null);
+
+  // derive bulk action counts
+  const selectedOutCount = [...selectedIds].filter((id) => out.some((a) => a.guard_id === id)).length;
+  const selectedInCount  = [...selectedIds].filter((id) => inside.some((a) => a.guard_id === id)).length;
+  const hasSelection = selectedIds.size > 0;
 
   if (loading) return <p className="text-center text-text-dim mt-10">טוען...</p>;
 
@@ -271,7 +352,7 @@ export default function AbsencesTab() {
           {alertOut.length > 0 && (
             <div className="card border-danger/40 bg-danger/10 slide-in">
               <p className="text-danger text-sm font-semibold">
-                ⚠️ {alertOut.map((a) => a.name).join(", ")} — מעל {settings.alert_minutes} דק' בחוץ!
+                ⚠️ {alertOut.map((a) => a.name).join(", ")} — חרגו מסף ההתראה!
               </p>
             </div>
           )}
@@ -291,14 +372,22 @@ export default function AbsencesTab() {
             ) : (
               <ul className="space-y-3">
                 {out.map((a) => {
-                  const alert = a.left_at ? isOverAlert(a.left_at, settings.alert_minutes) : false;
+                  const alertLevel = a.left_at ? getAlertLevel(a.left_at, settings.alert_thresholds) : null;
+                  const checked = selectedIds.has(a.guard_id);
                   return (
                     <li
                       key={a.guard_id}
-                      className={`flex items-center justify-between gap-2 rounded-xl px-3 py-3 slide-in
-                        ${alert ? "bg-danger/10 border border-danger/30" : "bg-bg-base"}`}
+                      className={`flex items-center gap-2 rounded-xl px-3 py-3 slide-in
+                        ${alertLevel ? LEVEL_ROW[alertLevel] : "bg-bg-base"}
+                        ${checked ? "ring-2 ring-primary/50" : ""}`}
                     >
-                      <div className="flex flex-col gap-0.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelect(a.guard_id)}
+                        className="w-4 h-4 accent-primary shrink-0"
+                      />
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-text">{a.name}</span>
                           {a.reason && (
@@ -312,7 +401,7 @@ export default function AbsencesTab() {
                             </span>
                           )}
                         </div>
-                        {a.left_at && <Clock leftAt={a.left_at} alert={alert} />}
+                        {a.left_at && <Clock leftAt={a.left_at} level={alertLevel} />}
                       </div>
                       <div className="flex gap-2 shrink-0">
                         <button
@@ -362,35 +451,84 @@ export default function AbsencesTab() {
               </p>
             ) : (
               <ul className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredInside.map((a) => (
-                  <li
-                    key={a.guard_id}
-                    className="flex items-center justify-between gap-2 bg-bg-base rounded-xl px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-text">{a.name}</span>
-                      {a.total_exits > 0 && (
-                        <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
-                          {a.total_exits} יציאות
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      className="btn-danger text-xs px-3 py-1.5"
-                      disabled={busy === a.guard_id}
-                      onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                {filteredInside.map((a) => {
+                  const checked = selectedIds.has(a.guard_id);
+                  return (
+                    <li
+                      key={a.guard_id}
+                      className={`flex items-center gap-2 bg-bg-base rounded-xl px-3 py-2
+                        ${checked ? "ring-2 ring-primary/50" : ""}`}
                     >
-                      יצא 🚪
-                    </button>
-                  </li>
-                ))}
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelect(a.guard_id)}
+                        className="w-4 h-4 accent-primary shrink-0"
+                      />
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="font-medium text-text">{a.name}</span>
+                        {a.total_exits > 0 && (
+                          <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
+                            {a.total_exits} יציאות
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        className="btn-danger text-xs px-3 py-1.5 shrink-0"
+                        disabled={busy === a.guard_id}
+                        onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                      >
+                        יצא 🚪
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         </>
       )}
 
-      {/* Reason Sheet */}
+      {/* ── Bulk action bar ── */}
+      {hasSelection && view === "now" && (
+        <div
+          className="fixed bottom-16 inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
+          dir="rtl"
+        >
+          <div className="bg-bg-card border border-bg-border rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3 pointer-events-auto slide-in">
+            <span className="text-sm font-bold text-text">
+              נבחרו {selectedIds.size}
+            </span>
+            <div className="w-px h-5 bg-bg-border" />
+            {selectedInCount > 0 && (
+              <button
+                className="btn-danger text-xs px-3 py-1.5"
+                disabled={bulkBusy}
+                onClick={() => setPendingBulkLeave(true)}
+              >
+                יצאו ({selectedInCount}) 🚪
+              </button>
+            )}
+            {selectedOutCount > 0 && (
+              <button
+                className="btn-primary text-xs px-3 py-1.5"
+                disabled={bulkBusy}
+                onClick={doBulkReturn}
+              >
+                חזרו ({selectedOutCount}) ✅
+              </button>
+            )}
+            <button
+              className="text-text-dim hover:text-text text-sm px-1"
+              onClick={clearSelection}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Single Reason Sheet */}
       {pendingLeave && (
         <ReasonSheet
           name={pendingLeave.name}
@@ -400,6 +538,18 @@ export default function AbsencesTab() {
             doAction(() => markLeave(id, reason), id);
           }}
           onCancel={() => setPendingLeave(null)}
+        />
+      )}
+
+      {/* Bulk Reason Sheet */}
+      {pendingBulkLeave && (
+        <ReasonSheet
+          name={`${selectedInCount} אנשים`}
+          onSelect={(reason) => {
+            setPendingBulkLeave(false);
+            doBulkLeave(reason);
+          }}
+          onCancel={() => setPendingBulkLeave(false)}
         />
       )}
     </div>

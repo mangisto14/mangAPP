@@ -7,7 +7,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-import sqlite3, os, urllib.parse, csv, io
+from contextlib import contextmanager
+import os, urllib.parse, csv, io, logging, traceback
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+_log = logging.getLogger("mangapp")
 
 app = FastAPI(title="מצבת כוח API", version="3.0.0")
 
@@ -28,39 +32,111 @@ HE_DAY = {
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
+DATABASE_URL = os.getenv("DATABASE_URL")
+IS_PG = bool(DATABASE_URL)
+
+if IS_PG:
+    import psycopg2
+    import psycopg2.extras
+    import psycopg2.errors
+else:
+    import sqlite3
+
+
+def _q(sql: str) -> str:
+    """Replace ? placeholders with %s for PostgreSQL"""
+    if IS_PG:
+        return sql.replace("?", "%s")
+    return sql
+
+
+_IntegrityError = psycopg2.errors.UniqueViolation if IS_PG else sqlite3.IntegrityError  # type: ignore[name-defined]
+
+# Primary key column definition
+_SERIAL_PK = "id SERIAL PRIMARY KEY" if IS_PG else "id INTEGER PRIMARY KEY AUTOINCREMENT"
+
+
+class PgConn:
+    """Wraps psycopg2 connection to expose a sqlite3-compatible execute() interface"""
+
+    def __init__(self, raw):
+        self._raw = raw
+        self._cur = raw.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    def execute(self, sql, params=()):
+        self._cur.execute(sql, params if params else None)
+        return self._cur
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
+
+
 def db_path() -> str:
+    volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if volume_path:
+        return os.path.join(volume_path, "guard_system.db")
     if os.path.exists("/app/data"):
         return "/app/data/guard_system.db"
     return "guard_system.db"
 
 
-def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path())
-    conn.row_factory = sqlite3.Row
-    return conn
+@contextmanager
+def get_conn():
+    if IS_PG:
+        url = DATABASE_URL
+        # Supabase sometimes provides postgres:// – psycopg2 prefers postgresql://
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        # Ensure SSL for Supabase / hosted PG
+        if "sslmode" not in url:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + "sslmode=require"
+        if "connect_timeout" not in url:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + "connect_timeout=10"
+        raw = psycopg2.connect(url)
+        conn = PgConn(raw)
+    else:
+        raw = sqlite3.connect(db_path())
+        raw.row_factory = sqlite3.Row
+        conn = raw
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
     with get_conn() as conn:
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS guards (
-                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                {_SERIAL_PK},
                 name  TEXT UNIQUE NOT NULL,
                 phone TEXT,
                 role  TEXT
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS shifts (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                {_SERIAL_PK},
                 start_time TEXT NOT NULL,
                 end_time   TEXT NOT NULL,
                 names      TEXT NOT NULL
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS absences (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                {_SERIAL_PK},
                 guard_id    INTEGER NOT NULL,
                 left_at     TEXT NOT NULL,
                 returned_at TEXT,
@@ -73,19 +149,433 @@ def init_db() -> None:
                 value TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS rotation_config (
+                id           INTEGER PRIMARY KEY,
+                start_date   TEXT NOT NULL,
+                period_days  INTEGER NOT NULL DEFAULT 2
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rotation_roles (
+                {_SERIAL_PK},
+                name     TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rotation_slots (
+                {_SERIAL_PK},
+                role_id  INTEGER NOT NULL REFERENCES rotation_roles(id) ON DELETE CASCADE,
+                slot_num INTEGER NOT NULL,
+                names    TEXT NOT NULL DEFAULT '[]'
+            )
+        """)
         # Safe migrations for existing DBs
-        for sql in [
+        migrations = [
             "ALTER TABLE guards ADD COLUMN phone TEXT",
             "ALTER TABLE guards ADD COLUMN role TEXT",
             "ALTER TABLE absences ADD COLUMN reason TEXT",
-        ]:
-            try:
-                conn.execute(sql)
-            except Exception:
-                pass
+        ]
+        for sql in migrations:
+            if IS_PG:
+                # PostgreSQL: use IF NOT EXISTS to avoid transaction abort
+                safe_sql = sql.replace(
+                    "ADD COLUMN ", "ADD COLUMN IF NOT EXISTS "
+                )
+                conn.execute(safe_sql)
+            else:
+                try:
+                    conn.execute(sql)
+                except Exception:
+                    pass
+        # One-time: set reason='חופשה' for open absences with no reason
+        migrated = conn.execute(
+            "SELECT value FROM settings WHERE key='migration_open_reason_set'"
+        ).fetchone()
+        if not migrated:
+            conn.execute(
+                "UPDATE absences SET reason='חופשה' WHERE returned_at IS NULL AND reason IS NULL"
+            )
+            if IS_PG:
+                conn.execute(
+                    "INSERT INTO settings (key, value) VALUES ('migration_open_reason_set', '1') ON CONFLICT (key) DO NOTHING"
+                )
+            else:
+                conn.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES ('migration_open_reason_set', '1')"
+                )
 
 
-init_db()
+try:
+    init_db()
+    _log.info("init_db: OK (IS_PG=%s)", IS_PG)
+except Exception:
+    _log.error("init_db FAILED (server will still start):\n%s", traceback.format_exc())
+
+
+# ── Seed Rotation ─────────────────────────────────────────────────────────────
+import json as _json
+
+_DEFAULT_ROTATION = {
+    "start_date": "2025-03-08",
+    "period_days": 2,
+    # מחזור 7-ימי: א-ג (ראשון+שני 2י), ג-ה (שלישי+רביעי 2י, חמישי=חזרה), ו-א (שישי+שבת 2י)
+    # slot[0]=א-ג, slot[1]=ג-ה, slot[2]=ו-א  (נוסחה: ((1-שבוע-תקופה)%3+3)%3)
+    "roles": [
+        {"name": "קצינים",  "slots": [["טל"], ["שלמה"], ["זיו"]]},
+        {"name": "מפקדים", "slots": [["יוסף"], ["אביתר"], ["בועז"]]},
+        {"name": "פקחים",  "slots": [
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],
+            ["דדון", "שלומי", "טלקר", "ביטון"],
+            ["חן", "גיל שמואל", "ירין"],
+        ]},
+        {"name": "נהגים",  "slots": [["גיל", "עוז"], ["מתנאל", "נוני"], ["ישראל", "רומן"]]},
+        {"name": "מטהרים", "slots": [["אסף", "אליאב"], ["גל", "עמיר", "שלומי"], ["נדב", "לירן"]]},
+        {"name": "עתודאים", "slots": [
+            ["שי שני", "דוד סויסה", "יובל מועלם"],
+            ["רועי נגאוקר", "טל ברוקר", "מתן קזז", "תומר שמאי"],
+            ["יהונתן קפיטל", "אור הדר", "אריאל קרליך"],
+        ]},
+    ],
+}
+
+# מחזור 9-תקופות: כל תקופה עם שיבוץ עצמאי (3 שבועות × 3 תקופות/שבוע)
+# slot 0=08/3(א-ג), 1=10/3(ג-ה), 2=13/3(ו-א), 3=15/3(א-ג), 4=17/3(ג-ה),
+#       5=20/3(ו-א), 6=22/3(א-ג), 7=24/3(ג-ה), 8=27/3(ו-א)
+_ROTATION_9SLOTS: dict = {
+    "start_date": "2026-03-08",
+    "roles": {
+        "קצינים": [
+            ["טל"], ["זיו"], ["שלמה"], ["זיו"], ["שלמה"],
+            ["טל"], ["שלמה"], ["טל"], ["זיו"],
+        ],
+        "מפקדים": [
+            ["יוסף"], ["בועז"], ["אביתר"], ["בועז"], ["אביתר"],
+            ["יוסף"], ["אביתר"], ["יוסף"], ["בועז"],
+        ],
+        "פקחים": [
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],   # 0: 08/3
+            ["חן", "גיל שמואל", "ירין"],                    # 1: 10/3
+            ["דדון", "שלומי", "טלקר", "ביטון"],             # 2: 13/3
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],   # 3: 15/3
+            ["דדון", "שלומי", "טלקר", "ביטון"],             # 4: 17/3
+            ["חן", "גיל בוחניק", "ירין"],                   # 5: 20/3
+            ["דדון", "שלומי", "טלקר", "ביטון"],             # 6: 22/3
+            ["חן", "גיל בוחניק", "ירין"],                   # 7: 24/3
+            ["שי כהן", "גיל בוחניק", "עוז", "חי מגנזי"],   # 8: 27/3
+        ],
+        "נהגים": [
+            ["גיל", "עוז"], ["ישראל", "רומן"], ["מתנאל", "נוני"],
+            ["גיל", "עוז"], ["מתנאל", "נוני"], ["ישראל", "רומן"],
+            ["מתנאל", "נוני"], ["ישראל", "רומן"], ["גיל", "עוז"],
+        ],
+        "מטהרים": [
+            ["אסף", "אליאב"], ["נדב", "לירן", "גל"], ["עמיר", "שלומי ס"],
+            ["אסף", "אליאב"], ["עמיר", "שלומי ס"], ["נדב", "לירן", "גל"],
+            ["עמיר", "שלומי ס"], ["נדב", "לירן", "גל"], ["אסף", "אליאב"],
+        ],
+        "עתודאים": [
+            ["שי שני", "דוד סויסה", "יובל מועלם", "טל ברוקר"],  # 0: 08/3
+            ["יהונתן פריאל", "אור הדר", "אריאל קרליך"],          # 1: 10/3
+            ["רועי נגאוקר", "מתן קזז", "תומר שמאי"],             # 2: 13/3
+            ["יהונתן פריאל", "אור הדר", "אריאל קרליך"],          # 3: 15/3
+            ["רועי נגאוקר", "מתן קזז", "תומר שמאי"],             # 4: 17/3
+            ["שי שני", "דוד סויסה", "יובל מועלם", "טל ברוקר"],  # 5: 20/3
+            ["רועי נגאוקר", "מתן קזז", "תומר שמאי"],             # 6: 22/3
+            ["שי שני", "דוד סויסה", "יובל מועלם", "טל ברוקר"],  # 7: 24/3
+            ["יהונתן פריאל", "אור הדר", "אריאל קרליך"],          # 8: 27/3
+        ],
+    },
+}
+
+
+def seed_rotation() -> None:
+    with get_conn() as conn:
+        existing = conn.execute("SELECT id FROM rotation_config").fetchone()
+        if existing:
+            return
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, %s, %s) ON CONFLICT (id) DO NOTHING",
+                (_DEFAULT_ROTATION["start_date"], _DEFAULT_ROTATION["period_days"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
+                (_DEFAULT_ROTATION["start_date"], _DEFAULT_ROTATION["period_days"]),
+            )
+        for pos, role_data in enumerate(_DEFAULT_ROTATION["roles"]):
+            if IS_PG:
+                cur = conn.execute(
+                    "INSERT INTO rotation_roles (name, position) VALUES (%s, %s) RETURNING id",
+                    (role_data["name"], pos),
+                )
+                role_id = cur.fetchone()["id"]
+            else:
+                cur = conn.execute(
+                    "INSERT INTO rotation_roles (name, position) VALUES (?, ?)",
+                    (role_data["name"], pos),
+                )
+                role_id = cur.lastrowid
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                    (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+                )
+
+
+try:
+    seed_rotation()
+    _log.info("seed_rotation: OK")
+except Exception:
+    _log.error("seed_rotation FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v2() -> None:
+    """מיגרציה חד-פעמית: תיקון סדר slots לפי מחזור ו-א/א-ג/ג-ה הנכון."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v2_migrated'"
+        ).fetchone()
+        if already:
+            return
+        for role_data in _DEFAULT_ROTATION["roles"]:
+            role = conn.execute(
+                _q("SELECT id FROM rotation_roles WHERE name=?"),
+                (role_data["name"],),
+            ).fetchone()
+            if not role:
+                continue
+            role_id = role["id"]
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE role_id=? AND slot_num=?"),
+                    (_json.dumps(names, ensure_ascii=False), role_id, slot_num),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v2_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v2_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v2()
+    _log.info("migrate_rotation_v2: OK")
+except Exception:
+    _log.error("migrate_rotation_v2 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v3() -> None:
+    """מיגרציה חד-פעמית: תיקון שמות פקחים ועתודאים + החלפת slots עתודאים."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v3_migrated'"
+        ).fetchone()
+        if already:
+            return
+        for role_data in _DEFAULT_ROTATION["roles"]:
+            role = conn.execute(
+                _q("SELECT id FROM rotation_roles WHERE name=?"),
+                (role_data["name"],),
+            ).fetchone()
+            if not role:
+                continue
+            role_id = role["id"]
+            for slot_num, names in enumerate(role_data["slots"]):
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE role_id=? AND slot_num=?"),
+                    (_json.dumps(names, ensure_ascii=False), role_id, slot_num),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v3_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v3_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v3()
+    _log.info("migrate_rotation_v3: OK")
+except Exception:
+    _log.error("migrate_rotation_v3 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v4() -> None:
+    """מיגרציה חד-פעמית: גיל ש → גיל שמואל בפקחים + החזרת start_date ל-2025-03-08."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v4_migrated'"
+        ).fetchone()
+        if already:
+            return
+        conn.execute(
+            _q("UPDATE rotation_config SET start_date='2025-03-08' WHERE start_date='2026-03-08'")
+        )
+        role = conn.execute(
+            _q("SELECT id FROM rotation_roles WHERE name='פקחים'")
+        ).fetchone()
+        if role:
+            slot = conn.execute(
+                _q("SELECT id, names FROM rotation_slots WHERE role_id=? AND slot_num=2"),
+                (role["id"],),
+            ).fetchone()
+            if slot:
+                names = _json.loads(slot["names"])
+                names = ["גיל שמואל" if n == "גיל ש" else n for n in names]
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE id=?"),
+                    (_json.dumps(names, ensure_ascii=False), slot["id"]),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v4_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v4_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v4()
+    _log.info("migrate_rotation_v4: OK")
+except Exception:
+    _log.error("migrate_rotation_v4 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v5() -> None:
+    """מיגרציה חד-פעמית: החזרת start_date ל-2025-03-08 (תיקון v4 שרץ בטעות)."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v5_migrated'"
+        ).fetchone()
+        if already:
+            return
+        conn.execute(
+            _q("UPDATE rotation_config SET start_date='2025-03-08'")
+        )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v5_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v5_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v5()
+    _log.info("migrate_rotation_v5: OK")
+except Exception:
+    _log.error("migrate_rotation_v5 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v6() -> None:
+    """מיגרציה חד-פעמית: בוחניק → גיל בוחניק בפקחים slot[0]."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v6_migrated'"
+        ).fetchone()
+        if already:
+            return
+        role = conn.execute(
+            _q("SELECT id FROM rotation_roles WHERE name='פקחים'")
+        ).fetchone()
+        if role:
+            slot = conn.execute(
+                _q("SELECT id, names FROM rotation_slots WHERE role_id=? AND slot_num=0"),
+                (role["id"],),
+            ).fetchone()
+            if slot:
+                names = _json.loads(slot["names"])
+                names = ["גיל בוחניק" if n == "בוחניק" else n for n in names]
+                conn.execute(
+                    _q("UPDATE rotation_slots SET names=? WHERE id=?"),
+                    (_json.dumps(names, ensure_ascii=False), slot["id"]),
+                )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v6_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value)"
+                " VALUES ('rotation_v6_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v6()
+    _log.info("migrate_rotation_v6: OK")
+except Exception:
+    _log.error("migrate_rotation_v6 FAILED:\n%s", traceback.format_exc())
+
+
+def migrate_rotation_v7() -> None:
+    """מיגרציה חד-פעמית: מעבר ל-9 slots — כל תקופה עם שיבוץ עצמאי."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='rotation_v7_migrated'"
+        ).fetchone()
+        if already:
+            return
+        conn.execute(_q("UPDATE rotation_config SET start_date='2026-03-08' WHERE id=1"))
+        for role_name, slots in _ROTATION_9SLOTS["roles"].items():
+            role = conn.execute(
+                _q("SELECT id FROM rotation_roles WHERE name=?"), (role_name,)
+            ).fetchone()
+            if not role:
+                continue
+            role_id = role["id"]
+            for slot_num, names in enumerate(slots):
+                existing = conn.execute(
+                    _q("SELECT id FROM rotation_slots WHERE role_id=? AND slot_num=?"),
+                    (role_id, slot_num),
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        _q("UPDATE rotation_slots SET names=? WHERE role_id=? AND slot_num=?"),
+                        (_json.dumps(names, ensure_ascii=False), role_id, slot_num),
+                    )
+                else:
+                    conn.execute(
+                        _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                        (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+                    )
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('rotation_v7_migrated', '1')"
+                " ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('rotation_v7_migrated', '1')"
+            )
+
+
+try:
+    migrate_rotation_v7()
+    _log.info("migrate_rotation_v7: OK")
+except Exception:
+    _log.error("migrate_rotation_v7 FAILED:\n%s", traceback.format_exc())
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────
@@ -122,17 +612,98 @@ def seed_db() -> None:
     with get_conn() as conn:
         for start, end, names in shifts:
             exists = conn.execute(
-                "SELECT 1 FROM shifts WHERE start_time=? AND end_time=? AND names=?",
+                _q("SELECT 1 FROM shifts WHERE start_time=? AND end_time=? AND names=?"),
                 (start, end, names),
             ).fetchone()
             if not exists:
                 conn.execute(
-                    "INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)",
+                    _q("INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)"),
                     (start, end, names),
                 )
 
 
-seed_db()
+try:
+    seed_db()
+    _log.info("seed_db: OK")
+except Exception:
+    _log.error("seed_db FAILED:\n%s", traceback.format_exc())
+
+
+# ── Seed Absences ─────────────────────────────────────────────────────────────
+def seed_absences_data() -> None:
+    """Seed historical absence data (runs once, skipped if already seeded)."""
+    with get_conn() as conn:
+        already = conn.execute(
+            "SELECT value FROM settings WHERE key='seed_absences_v1'"
+        ).fetchone()
+        if already:
+            return
+
+        records = [
+            # (name, reason, left_at, returned_at)  — None = still out
+            ("תומר שמאי",     "מחלה",  "2026-03-10T20:58:00", None),
+            ("אסף אבינועם",   "אישי",  "2026-03-10T19:32:00", "2026-03-10T20:58:00"),
+            ("מתנאל בנימין",  "אישי",  "2026-03-10T19:30:00", "2026-03-10T20:58:00"),
+            ("אביתר ביטון",   "אישי",  "2026-03-10T16:28:00", "2026-03-10T16:28:00"),
+            ("אביתר ביטון",   None,    "2026-03-10T14:04:00", "2026-03-10T14:25:00"),
+            ("אור הדר",       None,    "2026-03-10T14:01:00", "2026-03-10T14:01:00"),
+            ("אביתר ביטון",   None,    "2026-03-10T13:50:00", "2026-03-10T14:01:00"),
+            ("אביתר כהן",     None,    "2026-03-10T13:50:00", "2026-03-10T14:01:00"),
+            ("אביתר ביטון",   None,    "2026-03-10T13:49:00", "2026-03-10T13:50:00"),
+            ("זיו יוספי",     "חופשה", "2026-03-10T10:00:00", None),
+            ("בועז רפאלי",    "חופשה", "2026-03-10T10:00:00", None),
+            ("חן דנסינגר",    "חופשה", "2026-03-10T10:00:00", None),
+            ("גיל שמואל",     "חופשה", "2026-03-10T10:00:00", None),
+            ("ירין וקנין",    "חופשה", "2026-03-10T10:00:00", None),
+            ("ישראל נעים",    "חופשה", "2026-03-10T10:00:00", None),
+            ("רומן פלדמן",    "חופשה", "2026-03-10T10:00:00", None),
+            ("נדב אברהם",     "חופשה", "2026-03-10T10:00:00", None),
+            ("לירן טביבזאדה", "חופשה", "2026-03-10T10:00:00", None),
+            ("גל עמר",        "חופשה", "2026-03-10T10:00:00", None),
+            ("אור הדר",       "חופשה", "2026-03-10T10:00:00", None),
+            ("אריאל קרליך",   "חופשה", "2026-03-10T10:00:00", None),
+            ("יהונתן פריאל",  "חופשה", "2026-03-10T10:00:00", None),
+        ]
+
+        for name, reason, left_at, returned_at in records:
+            if IS_PG:
+                cur = conn.execute(
+                    "INSERT INTO guards (name) VALUES (%s) ON CONFLICT (name) DO NOTHING RETURNING id",
+                    (name,),
+                )
+                row = cur.fetchone()
+                if row:
+                    gid = row["id"]
+                else:
+                    gid = conn.execute(
+                        "SELECT id FROM guards WHERE name=%s", (name,)
+                    ).fetchone()["id"]
+            else:
+                conn.execute("INSERT OR IGNORE INTO guards (name) VALUES (?)", (name,))
+                gid = conn.execute(
+                    "SELECT id FROM guards WHERE name=?", (name,)
+                ).fetchone()["id"]
+
+            conn.execute(
+                _q("INSERT INTO absences (guard_id, left_at, returned_at, reason) VALUES (?,?,?,?)"),
+                (gid, left_at, returned_at, reason),
+            )
+
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES ('seed_absences_v1', '1') ON CONFLICT (key) DO NOTHING"
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('seed_absences_v1', '1')"
+            )
+
+
+try:
+    seed_absences_data()
+    _log.info("seed_absences_data: OK")
+except Exception:
+    _log.error("seed_absences_data FAILED:\n%s", traceback.format_exc())
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -192,8 +763,14 @@ class AbsenceActionBody(BaseModel):
     guard_id: int
 
 
+class AlertThresholdItem(BaseModel):
+    minutes: int
+    level: str  # "warning" | "danger" | "critical"
+
+
 class SettingsBody(BaseModel):
     alert_minutes: Optional[int] = None
+    alert_thresholds: Optional[List[AlertThresholdItem]] = None
 
 
 class SeedAbsenceItem(BaseModel):
@@ -203,6 +780,45 @@ class SeedAbsenceItem(BaseModel):
 
 class SeedAbsencesBody(BaseModel):
     guards: list[SeedAbsenceItem]
+
+
+class RotationConfigUpdateBody(BaseModel):
+    start_date: str
+    period_days: int = 2
+
+
+class RotationRoleCreateBody(BaseModel):
+    name: str
+
+
+class RotationRoleUpdateBody(BaseModel):
+    name: str
+    position: Optional[int] = None
+
+
+class RotationSlotsUpdateBody(BaseModel):
+    slots: List[List[str]]  # 3 lists, one per slot
+
+
+# ── Health / Debug ────────────────────────────────────────────────────────────
+@app.get("/api/health")
+def health():
+    try:
+        with get_conn() as conn:
+            if IS_PG:
+                tables = [r[0] for r in conn.execute(
+                    "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"
+                ).fetchall()]
+            else:
+                tables = [r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                ).fetchall()]
+            counts = {}
+            for t in tables:
+                counts[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        return {"status": "ok", "db": "pg" if IS_PG else "sqlite", "tables": counts}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 # ── PIN ───────────────────────────────────────────────────────────────────────
@@ -250,10 +866,16 @@ def add_guards(body: GuardCreateBody):
             name = raw.strip()
             if not name:
                 continue
-            try:
-                conn.execute("INSERT INTO guards (name) VALUES (?)", (name,))
+            if IS_PG:
+                cur = conn.execute(
+                    "INSERT INTO guards (name) VALUES (%s) ON CONFLICT (name) DO NOTHING",
+                    (name,),
+                )
+            else:
+                cur = conn.execute("INSERT OR IGNORE INTO guards (name) VALUES (?)", (name,))
+            if cur.rowcount > 0:
                 added.append(name)
-            except sqlite3.IntegrityError:
+            else:
                 skipped.append(name)
     return {"added": added, "skipped": skipped}
 
@@ -261,13 +883,13 @@ def add_guards(body: GuardCreateBody):
 @app.put("/api/guards/{guard_id}")
 def update_guard(guard_id: int, body: GuardUpdateBody):
     with get_conn() as conn:
-        row = conn.execute("SELECT name FROM guards WHERE id=?", (guard_id,)).fetchone()
+        row = conn.execute(_q("SELECT name FROM guards WHERE id=?"), (guard_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Guard not found")
         old_name = row["name"]
         try:
             conn.execute(
-                "UPDATE guards SET name=?,phone=?,role=? WHERE id=?",
+                _q("UPDATE guards SET name=?,phone=?,role=? WHERE id=?"),
                 (body.name, body.phone, body.role, guard_id),
             )
             if body.name != old_name:
@@ -276,10 +898,19 @@ def update_guard(guard_id: int, body: GuardUpdateBody):
                     if old_name in parts:
                         new_names = [body.name if n == old_name else n for n in parts]
                         conn.execute(
-                            "UPDATE shifts SET names=? WHERE id=?",
+                            _q("UPDATE shifts SET names=? WHERE id=?"),
                             (",".join(new_names), shift["id"]),
                         )
-        except sqlite3.IntegrityError:
+                # Propagate name change to rotation_slots
+                for slot in conn.execute("SELECT id,names FROM rotation_slots").fetchall():
+                    names_list = _json.loads(slot["names"])
+                    if old_name in names_list:
+                        new_names_list = [body.name if n == old_name else n for n in names_list]
+                        conn.execute(
+                            _q("UPDATE rotation_slots SET names=? WHERE id=?"),
+                            (_json.dumps(new_names_list, ensure_ascii=False), slot["id"]),
+                        )
+        except _IntegrityError:
             raise HTTPException(400, "Name already exists")
     return {"ok": True}
 
@@ -287,23 +918,34 @@ def update_guard(guard_id: int, body: GuardUpdateBody):
 @app.delete("/api/guards/{guard_id}")
 def delete_guard(guard_id: int):
     with get_conn() as conn:
-        conn.execute("DELETE FROM guards WHERE id=?", (guard_id,))
+        conn.execute(_q("DELETE FROM guards WHERE id=?"), (guard_id,))
     return {"ok": True}
 
 
 # ── Shifts ────────────────────────────────────────────────────────────────────
 @app.get("/api/shifts")
-def list_shifts(filter: str = "all"):
+def list_shifts(
+    filter: str = "all",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
     now = datetime.now()
+    from_dt = datetime.fromisoformat(date_from) if date_from else None
+    to_dt = datetime.fromisoformat(date_to + "T23:59:59") if date_to else None
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM shifts ORDER BY start_time").fetchall()
+        rows = conn.execute("SELECT * FROM shifts ORDER BY start_time DESC").fetchall()
     result = []
     for s in rows:
+        start_dt = datetime.fromisoformat(s["start_time"])
         end_dt = datetime.fromisoformat(s["end_time"])
         is_past = end_dt <= now
         if filter == "future" and is_past:
             continue
         if filter == "past" and not is_past:
+            continue
+        if from_dt and start_dt < from_dt:
+            continue
+        if to_dt and start_dt > to_dt:
             continue
         result.append({
             "id": s["id"],
@@ -320,7 +962,7 @@ def add_shifts(body: ShiftsBatchBody):
     with get_conn() as conn:
         for shift in body.shifts:
             conn.execute(
-                "INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)",
+                _q("INSERT INTO shifts (start_time,end_time,names) VALUES (?,?,?)"),
                 (shift.start_time, shift.end_time, ",".join(shift.names)),
             )
     return {"ok": True, "count": len(body.shifts)}
@@ -329,7 +971,7 @@ def add_shifts(body: ShiftsBatchBody):
 @app.delete("/api/shifts/{shift_id}")
 def delete_shift(shift_id: int):
     with get_conn() as conn:
-        conn.execute("DELETE FROM shifts WHERE id=?", (shift_id,))
+        conn.execute(_q("DELETE FROM shifts WHERE id=?"), (shift_id,))
     return {"ok": True}
 
 
@@ -368,6 +1010,11 @@ def suggest_next_shift(limit: int = 3):
     stats = compute_stats(now)
     if not stats:
         return []
+    with get_conn() as conn:
+        absent_rows = conn.execute(
+            "SELECT g.name FROM absences a JOIN guards g ON g.id = a.guard_id WHERE a.returned_at IS NULL"
+        ).fetchall()
+    absent_names = {row["name"] for row in absent_rows}
     candidates = []
     for name, s in stats.items():
         last_dt = s["last_past_date"]
@@ -378,8 +1025,10 @@ def suggest_next_shift(limit: int = 3):
             "total": s["past"] + s["future"],
             "last_past_date": last_dt.isoformat() if last_dt else None,
             "overloaded": s["future"] >= OVERLOAD_THRESHOLD,
+            "is_out": name in absent_names,
         })
     candidates.sort(key=lambda g: (
+        1 if g["is_out"] else 0,
         g["future"],
         g["total"],
         g["last_past_date"] if g["last_past_date"] else "0000-00-00",
@@ -393,7 +1042,7 @@ def get_whatsapp_url():
     now = datetime.now()
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM shifts WHERE start_time > ? ORDER BY start_time",
+            _q("SELECT * FROM shifts WHERE start_time > ? ORDER BY start_time"),
             (now.isoformat(),),
         ).fetchall()
     if not rows:
@@ -430,19 +1079,37 @@ def get_settings():
     with get_conn() as conn:
         rows = conn.execute("SELECT key,value FROM settings").fetchall()
     s = {row["key"]: row["value"] for row in rows}
-    return {"alert_minutes": int(s["alert_minutes"]) if s.get("alert_minutes") else None}
+    thresholds = []
+    if s.get("alert_thresholds"):
+        try:
+            thresholds = _json.loads(s["alert_thresholds"])
+        except Exception:
+            thresholds = []
+    return {
+        "alert_minutes": int(s["alert_minutes"]) if s.get("alert_minutes") else None,
+        "alert_thresholds": thresholds,
+    }
+
+
+def _upsert_setting(conn, key: str, value: str):
+    if IS_PG:
+        conn.execute(
+            "INSERT INTO settings (key,value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            (key, value),
+        )
+    else:
+        conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)", (key, value))
 
 
 @app.post("/api/settings")
 def update_settings(body: SettingsBody):
     with get_conn() as conn:
         if body.alert_minutes is not None:
-            conn.execute(
-                "INSERT OR REPLACE INTO settings (key,value) VALUES ('alert_minutes',?)",
-                (str(body.alert_minutes),),
-            )
+            _upsert_setting(conn, "alert_minutes", str(body.alert_minutes))
         else:
             conn.execute("DELETE FROM settings WHERE key='alert_minutes'")
+        if body.alert_thresholds is not None:
+            _upsert_setting(conn, "alert_thresholds", _json.dumps([t.dict() for t in body.alert_thresholds]))
     return {"ok": True}
 
 
@@ -478,13 +1145,13 @@ def list_absences():
 def mark_leave(body: AbsenceLeaveBody):
     with get_conn() as conn:
         already = conn.execute(
-            "SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL",
+            _q("SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL"),
             (body.guard_id,),
         ).fetchone()
         if already:
             raise HTTPException(400, "Guard is already out")
         conn.execute(
-            "INSERT INTO absences (guard_id,left_at,reason) VALUES (?,?,?)",
+            _q("INSERT INTO absences (guard_id,left_at,reason) VALUES (?,?,?)"),
             (body.guard_id, datetime.now().isoformat(), body.reason),
         )
     return {"ok": True}
@@ -494,13 +1161,13 @@ def mark_leave(body: AbsenceLeaveBody):
 def mark_return(body: AbsenceActionBody):
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL",
+            _q("SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL"),
             (body.guard_id,),
         ).fetchone()
         if not row:
             raise HTTPException(400, "Guard is not marked as out")
         conn.execute(
-            "UPDATE absences SET returned_at=? WHERE id=?",
+            _q("UPDATE absences SET returned_at=? WHERE id=?"),
             (datetime.now().isoformat(), row["id"]),
         )
     return {"ok": True}
@@ -510,15 +1177,15 @@ def mark_return(body: AbsenceActionBody):
 def reset_absence(body: AbsenceActionBody):
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL",
+            _q("SELECT id FROM absences WHERE guard_id=? AND returned_at IS NULL"),
             (body.guard_id,),
         ).fetchone()
         if not row:
             raise HTTPException(400, "Guard is not marked as out")
         now = datetime.now().isoformat()
-        conn.execute("UPDATE absences SET returned_at=? WHERE id=?", (now, row["id"]))
+        conn.execute(_q("UPDATE absences SET returned_at=? WHERE id=?"), (now, row["id"]))
         conn.execute(
-            "INSERT INTO absences (guard_id,left_at) VALUES (?,?)",
+            _q("INSERT INTO absences (guard_id,left_at) VALUES (?,?)"),
             (body.guard_id, now),
         )
     return {"ok": True}
@@ -531,6 +1198,7 @@ def absences_history(
     date_to: Optional[str] = None,
 ):
     with get_conn() as conn:
+        ph = "%s" if IS_PG else "?"
         query = """
             SELECT a.id, g.name, g.id as guard_id,
                    a.left_at, a.returned_at, a.reason
@@ -540,13 +1208,13 @@ def absences_history(
         """
         params: list = []
         if guard_id:
-            query += " AND a.guard_id = ?"
+            query += f" AND a.guard_id = {ph}"
             params.append(guard_id)
         if date_from:
-            query += " AND a.left_at >= ?"
+            query += f" AND a.left_at >= {ph}"
             params.append(date_from)
         if date_to:
-            query += " AND a.left_at <= ?"
+            query += f" AND a.left_at <= {ph}"
             params.append(date_to + "T23:59:59")
         query += " ORDER BY a.left_at DESC"
         rows = conn.execute(query, params).fetchall()
@@ -613,22 +1281,253 @@ def seed_absences(body: SeedAbsencesBody):
     with get_conn() as conn:
         for item in body.guards:
             existing = conn.execute(
-                "SELECT id FROM guards WHERE name=?", (item.name,)
+                _q("SELECT id FROM guards WHERE name=?"), (item.name,)
             ).fetchone()
             if existing:
                 guard_id = existing["id"]
             else:
-                cur = conn.execute("INSERT INTO guards (name) VALUES (?)", (item.name,))
-                guard_id = cur.lastrowid
+                if IS_PG:
+                    cur = conn.execute(
+                        "INSERT INTO guards (name) VALUES (%s) RETURNING id", (item.name,)
+                    )
+                    guard_id = cur.fetchone()["id"]
+                else:
+                    cur = conn.execute("INSERT INTO guards (name) VALUES (?)", (item.name,))
+                    guard_id = cur.lastrowid
             conn.execute(
-                "UPDATE absences SET returned_at=? WHERE guard_id=? AND returned_at IS NULL",
+                _q("UPDATE absences SET returned_at=? WHERE guard_id=? AND returned_at IS NULL"),
                 (item.left_at, guard_id),
             )
             conn.execute(
-                "INSERT INTO absences (guard_id,left_at) VALUES (?,?)",
+                _q("INSERT INTO absences (guard_id,left_at) VALUES (?,?)"),
                 (guard_id, item.left_at),
             )
     return {"ok": True, "count": len(body.guards)}
+
+
+# ── Rotation ──────────────────────────────────────────────────────────────────
+def _build_rotation_response(conn) -> dict:
+    cfg = conn.execute("SELECT start_date, period_days FROM rotation_config WHERE id=1").fetchone()
+    roles = conn.execute("SELECT * FROM rotation_roles ORDER BY position").fetchall()
+    slots_all = conn.execute("SELECT * FROM rotation_slots ORDER BY slot_num").fetchall()
+    slots_map: dict = {}
+    for sl in slots_all:
+        slots_map.setdefault(sl["role_id"], {})[sl["slot_num"]] = _json.loads(sl["names"])
+    # Dynamic slot count: use max slot_num across all roles (at least 9)
+    all_slot_nums = [sl["slot_num"] for sl in slots_all]
+    max_slots = max(all_slot_nums) + 1 if all_slot_nums else 9
+    max_slots = max(max_slots, 9)
+    roles_out = []
+    for r in roles:
+        s = slots_map.get(r["id"], {})
+        roles_out.append({
+            "id": r["id"],
+            "name": r["name"],
+            "position": r["position"],
+            "slots": [s.get(i, []) for i in range(max_slots)],
+        })
+    return {
+        "start_date": cfg["start_date"] if cfg else "2025-03-08",
+        "period_days": cfg["period_days"] if cfg else 2,
+        "roles": roles_out,
+    }
+
+
+@app.get("/api/rotation")
+def get_rotation():
+    with get_conn() as conn:
+        return _build_rotation_response(conn)
+
+
+@app.put("/api/rotation/config")
+def update_rotation_config(body: RotationConfigUpdateBody):
+    with get_conn() as conn:
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO rotation_config (id, start_date, period_days) VALUES (1, %s, %s) ON CONFLICT (id) DO UPDATE SET start_date=EXCLUDED.start_date, period_days=EXCLUDED.period_days",
+                (body.start_date, body.period_days),
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
+                (body.start_date, body.period_days),
+            )
+    return {"ok": True}
+
+
+@app.post("/api/rotation/roles", status_code=201)
+def add_rotation_role(body: RotationRoleCreateBody):
+    with get_conn() as conn:
+        max_pos = conn.execute("SELECT MAX(position) as m FROM rotation_roles").fetchone()["m"]
+        pos = (max_pos or 0) + 1
+        if IS_PG:
+            cur = conn.execute(
+                "INSERT INTO rotation_roles (name, position) VALUES (%s, %s) RETURNING id",
+                (body.name, pos),
+            )
+            role_id = cur.fetchone()["id"]
+        else:
+            cur = conn.execute(
+                "INSERT INTO rotation_roles (name, position) VALUES (?, ?)",
+                (body.name, pos),
+            )
+            role_id = cur.lastrowid
+        for slot_num in range(9):
+            conn.execute(
+                _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                (role_id, slot_num, "[]"),
+            )
+    return {"ok": True, "id": role_id}
+
+
+@app.put("/api/rotation/roles/{role_id}")
+def update_rotation_role(role_id: int, body: RotationRoleUpdateBody):
+    with get_conn() as conn:
+        row = conn.execute(_q("SELECT id FROM rotation_roles WHERE id=?"), (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Role not found")
+        if body.position is not None:
+            conn.execute(
+                _q("UPDATE rotation_roles SET name=?, position=? WHERE id=?"),
+                (body.name, body.position, role_id),
+            )
+        else:
+            conn.execute(
+                _q("UPDATE rotation_roles SET name=? WHERE id=?"),
+                (body.name, role_id),
+            )
+    return {"ok": True}
+
+
+@app.delete("/api/rotation/roles/{role_id}")
+def delete_rotation_role(role_id: int):
+    with get_conn() as conn:
+        conn.execute(_q("DELETE FROM rotation_slots WHERE role_id=?"), (role_id,))
+        conn.execute(_q("DELETE FROM rotation_roles WHERE id=?"), (role_id,))
+    return {"ok": True}
+
+
+@app.put("/api/rotation/roles/{role_id}/slots")
+def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
+    if len(body.slots) < 9:
+        raise HTTPException(400, "Must provide at least 9 slots")
+    with get_conn() as conn:
+        row = conn.execute(_q("SELECT id FROM rotation_roles WHERE id=?"), (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Role not found")
+        conn.execute(_q("DELETE FROM rotation_slots WHERE role_id=?"), (role_id,))
+        for slot_num, names in enumerate(body.slots):
+            conn.execute(
+                _q("INSERT INTO rotation_slots (role_id, slot_num, names) VALUES (?, ?, ?)"),
+                (role_id, slot_num, _json.dumps(names, ensure_ascii=False)),
+            )
+    return {"ok": True}
+
+
+# ── Sync rotation ↔ guards ────────────────────────────────────────────────────
+
+@app.post("/api/sync/rotation-guards")
+def sync_rotation_guards():
+    """
+    Cross-reference rotation_slots ↔ guards:
+    1. Build name→role map from rotation slots
+    2. Update each guard's role if their name appears in rotation
+    3. Return summary: updated, conflicts (name in multiple roles), unknown (in rotation but not in guards)
+    """
+    with get_conn() as conn:
+        roles = conn.execute("SELECT id, name FROM rotation_roles").fetchall()
+        slots_all = conn.execute("SELECT role_id, names FROM rotation_slots").fetchall()
+        guards_all = conn.execute("SELECT id, name, role FROM guards").fetchall()
+
+        # Build name → [role_name, ...] map from rotation
+        name_to_roles: dict = {}
+        for slot in slots_all:
+            role_name = next((r["name"] for r in roles if r["id"] == slot["role_id"]), None)
+            if not role_name:
+                continue
+            for name in _json.loads(slot["names"]):
+                name = name.strip()
+                if not name:
+                    continue
+                name_to_roles.setdefault(name, set()).add(role_name)
+
+        guard_name_set = {g["name"] for g in guards_all}
+
+        # Names in rotation that don't exist in guards
+        unknown_in_rotation = [n for n in name_to_roles if n not in guard_name_set]
+
+        # Names appearing in multiple rotation roles (conflict)
+        conflicts = [
+            {"name": n, "roles": list(roles_set)}
+            for n, roles_set in name_to_roles.items()
+            if len(roles_set) > 1 and n in guard_name_set
+        ]
+        conflict_names = {c["name"] for c in conflicts}
+
+        # Update guards: only if name appears in exactly one rotation role
+        updated = []
+        for g in guards_all:
+            if g["name"] in name_to_roles and g["name"] not in conflict_names:
+                new_role = next(iter(name_to_roles[g["name"]]))
+                if g["role"] != new_role:
+                    conn.execute(
+                        _q("UPDATE guards SET role=? WHERE id=?"),
+                        (new_role, g["id"]),
+                    )
+                    updated.append({
+                        "name": g["name"],
+                        "old_role": g["role"],
+                        "new_role": new_role,
+                    })
+
+    return {
+        "updated": updated,
+        "conflicts": conflicts,
+        "unknown_in_rotation": unknown_in_rotation,
+    }
+
+
+# ── Schedule ──────────────────────────────────────────────────────────────────
+_DEFAULT_SCHEDULE = {
+    "periods": [
+        "08/3–10/3","10/3–12/3","13/3–15/3","15/3–17/3","17/3–19/3",
+        "20/3–22/3","22/3–24/3","24/3–26/3","27/3–29/3",
+    ],
+    "rows": [
+        {"role":"קצינים","cells":[["טל"],["זיו"],["שלמה"],["זיו"],["שלמה"],["טל"],["שלמה"],["טל"],["זיו"]]},
+        {"role":"מפקדים","cells":[["יוסף"],["בועז"],["אביתר"],["בועז"],["אביתר"],["יוסף"],["אביתר"],["יוסף"],["בועז"]]},
+        {"role":"פקחים","cells":[["שי כהן","גיל בוחניק","עוז","חי מגנזי"],["חן","גיל שמואל","ירין"],["דדון","שלומי","טלקר","ביטון"],["שי כהן","גיל בוחניק","עוז","חי מגנזי"],["דדון","שלומי","טלקר","ביטון"],["חן","גיל בוחניק","ירין"],["דדון","שלומי","טלקר","ביטון"],["חן","גיל בוחניק","ירין"],["שי כהן","גיל בוחניק","עוז","חי מגנזי"]]},
+        {"role":"נהגים","cells":[["גיל","עוז"],["ישראל","רומן"],["מתנאל","נוני"],["גיל","עוז"],["מתנאל","נוני"],["ישראל","רומן"],["מתנאל","נוני"],["ישראל","רומן"],["גיל","עוז"]]},
+        {"role":"מטהרים","cells":[["אסף","אליאב"],["נדב","לירן","גל"],["עמיר","שלומי ס"],["אסף","אליאב"],["עמיר","שלומי ס"],["נדב","לירן","גל"],["עמיר","שלומי ס"],["נדב","לירן","גל"],["אסף","אליאב"]]},
+        {"role":"עתודאים","cells":[["שי שני","דוד סויסה","יובל מועלם","טל ברוקר"],["יהונתן פריאל","אור הדר","אריאל קרליך"],["רועי נגאוקר","מתן קזז","תומר שמאי"],["יהונתן פריאל","אור הדר","אריאל קרליך"],["רועי נגאוקר","מתן קזז","תומר שמאי"],["שי שני","דוד סויסה","יובל מועלם","טל ברוקר"],["רועי נגאוקר","מתן קזז","תומר שמאי"],["שי שני","דוד סויסה","יובל מועלם","טל ברוקר"],["יהונתן פריאל","אור הדר","אריאל קרליך"]]},
+    ],
+}
+
+
+@app.get("/api/schedule")
+def get_schedule():
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key='schedule_json'").fetchone()
+    if row:
+        return _json.loads(row["value"])
+    return _DEFAULT_SCHEDULE
+
+
+@app.put("/api/schedule")
+def update_schedule(body: dict):
+    value = _json.dumps(body, ensure_ascii=False)
+    with get_conn() as conn:
+        if IS_PG:
+            conn.execute(
+                "INSERT INTO settings (key,value) VALUES ('schedule_json',%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+                (value,),
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key,value) VALUES ('schedule_json',?)",
+                (value,),
+            )
+    return {"ok": True}
 
 
 # ── Serve built React app ─────────────────────────────────────────────────────
@@ -643,4 +1542,7 @@ if os.path.exists(_DIST):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
+        # Let real API routes handle themselves – only catch non-API paths for SPA
+        if full_path.startswith("api") :
+            raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(os.path.join(_DIST, "index.html"))

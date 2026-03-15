@@ -18,6 +18,12 @@ export interface AbsenceHistory {
   duration_min: number | null;
 }
 
+export interface AlertThreshold {
+  minutes: number;
+  level: "warning" | "danger" | "critical";
+}
+
 export interface Settings {
   alert_minutes: number | null;
+  alert_thresholds: AlertThreshold[];
 }

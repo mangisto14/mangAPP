@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+export type AlertLevel = "warning" | "danger" | "critical" | null;
+
 function elapsed(leftAt: string) {
   const diff = Math.max(
     0,
@@ -12,7 +14,13 @@ function elapsed(leftAt: string) {
   return { days, h, m, s };
 }
 
-export default function Clock({ leftAt, alert }: { leftAt: string; alert?: boolean }) {
+const LEVEL_COLOR: Record<NonNullable<AlertLevel>, string> = {
+  warning:  "text-warning",
+  danger:   "text-orange-400",
+  critical: "text-danger",
+};
+
+export default function Clock({ leftAt, level }: { leftAt: string; level?: AlertLevel }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -20,13 +28,18 @@ export default function Clock({ leftAt, alert }: { leftAt: string; alert?: boole
   }, []);
 
   const { days, h, m, s } = elapsed(leftAt);
+  const colorClass = level ? LEVEL_COLOR[level] : "text-warning";
+
+  if (days > 0) {
+    return (
+      <span className={`font-mono text-sm font-bold tabular-nums ${colorClass}`}>
+        {days} יום {h}:{m}
+      </span>
+    );
+  }
+
   return (
-    <span className={`font-mono text-sm font-bold tabular-nums ${alert ? "text-danger" : "text-warning"}`}>
-      {days > 0 && (
-        <span className="text-xs font-semibold ml-1 opacity-80">
-          {days}י׳{" "}
-        </span>
-      )}
+    <span className={`font-mono text-sm font-bold tabular-nums ${colorClass}`}>
       {h}:{m}:{s}
     </span>
   );

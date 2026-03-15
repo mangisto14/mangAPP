@@ -99,7 +99,7 @@ export default function GuardsTab() {
           <div className="flex items-start gap-2">
             <AlertTriangle size={18} className="text-warning flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-warning mb-1">⚠️ שומרים עם עומס יתר</p>
+              <p className="font-bold text-warning mb-1">⚠️ אנשים עם עומס יתר</p>
               <div className="flex flex-wrap gap-2">
                 {overloaded.map((g) => (
                   <span key={g.id} className="overload-badge">
@@ -116,7 +116,7 @@ export default function GuardsTab() {
       <div className="card space-y-3">
         <h2 className="font-bold text-text flex items-center gap-2">
           <UserPlus size={16} className="text-primary-light" />
-          הוספת שומרים
+          הוספת אנשים
         </h2>
         <div className="flex gap-2">
           <input
@@ -128,21 +128,21 @@ export default function GuardsTab() {
           />
           <button onClick={handleAdd} className="btn-primary px-5">הוסף</button>
         </div>
-        <p className="text-xs text-text-dim">ניתן להוסיף מספר שומרים, מופרדים בפסיק</p>
+        <p className="text-xs text-text-dim">ניתן להוסיף מספר אנשים, מופרדים בפסיק</p>
       </div>
 
       {/* List */}
       <div className="card space-y-2">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-bold text-text">רשימת שומרים</h2>
+          <h2 className="font-bold text-text">רשימת אנשים</h2>
           <span className="text-xs text-text-dim bg-bg-base px-2 py-1 rounded-full">
-            {guards.length} שומרים
+            {guards.length} אנשים
           </span>
         </div>
 
         {loading && <div className="text-center text-text-dim py-6">טוען...</div>}
         {!loading && guards.length === 0 && (
-          <div className="text-center text-text-dim py-6">אין שומרים – הוסף למעלה</div>
+          <div className="text-center text-text-dim py-6">אין אנשים – הוסף למעלה</div>
         )}
 
         <div className="space-y-2 max-h-[500px] overflow-y-auto">
@@ -207,7 +207,7 @@ export default function GuardsTab() {
                         <input
                           value={e?.role ?? ""}
                           onChange={(ev) => setField(g.id, "role", ev.target.value)}
-                          placeholder="שומר / מפקד..."
+                          placeholder="פקח / מפקד / נהג..."
                           className="input text-sm py-1.5"
                         />
                       </div>

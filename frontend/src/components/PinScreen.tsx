@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const BASE = "/api";
+const BASE = (import.meta.env.VITE_API_URL ?? "") + "/api";
 
 async function verifyPin(pin: string): Promise<boolean> {
   const res = await fetch(`${BASE}/pin/verify?pin=${pin}`);
