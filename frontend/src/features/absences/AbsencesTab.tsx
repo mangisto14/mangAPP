@@ -370,7 +370,7 @@ export default function AbsencesTab() {
             {out.length === 0 ? (
               <p className="text-text-dim text-sm text-center py-4">אין יוצאים כרגע</p>
             ) : (
-              <ul className="space-y-3">
+              <ul className="space-y-3 max-h-80 overflow-y-auto pr-1">
                 {out.map((a) => {
                   const alertLevel = a.left_at ? getAlertLevel(a.left_at, settings.alert_thresholds) : null;
                   const checked = selectedIds.has(a.guard_id);
