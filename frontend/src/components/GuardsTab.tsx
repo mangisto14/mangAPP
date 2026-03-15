@@ -135,9 +135,23 @@ export default function GuardsTab() {
       <div className="card space-y-2">
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-bold text-text">רשימת אנשים</h2>
-          <span className="text-xs text-text-dim bg-bg-base px-2 py-1 rounded-full">
-            {guards.length} אנשים
-          </span>
+          <div className="flex items-center gap-2">
+            {guards.length > 0 && (
+              <button
+                className="text-xs text-text-dim hover:text-primary px-2 py-1 rounded-lg hover:bg-primary/10 transition-colors"
+                onClick={() => {
+                  const csv = guards.map((g) => g.name).join(", ");
+                  navigator.clipboard.writeText(csv).then(() => showToast("📋 הועתק ללוח"));
+                }}
+                title="ייצא רשימה"
+              >
+                📋 ייצא
+              </button>
+            )}
+            <span className="text-xs text-text-dim bg-bg-base px-2 py-1 rounded-full">
+              {guards.length} אנשים
+            </span>
+          </div>
         </div>
 
         {loading && <div className="text-center text-text-dim py-6">טוען...</div>}

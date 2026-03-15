@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import type { Guard } from "../types";
+import { getGuards, updateGuard } from "../api";
 
 const API = (import.meta.env.VITE_API_URL ?? "") + "/api/schedule";
 
@@ -25,14 +27,30 @@ function saveSchedule(schedule: Schedule) {
 // ── Cell edit modal ────────────────────────────────────────────────────────────
 function CellModal({
   names,
+  availableGuards,
   onSave,
   onClose,
 }: {
   names: string[];
+  availableGuards: Guard[];
   onSave: (names: string[]) => void;
   onClose: () => void;
 }) {
-  const [text, setText] = useState(names.join(", "));
+  const [selected, setSelected] = useState<Set<string>>(new Set(names));
+
+  function toggle(name: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  const selectedList = Array.from(selected);
+  const guardsByName = new Map(availableGuards.map((g) => [g.name, g]));
+  const sortedGuards = [...availableGuards].sort((a, b) => a.name.localeCompare(b.name, "he-IL"));
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4" onClick={onClose}>
       <div
@@ -44,23 +62,59 @@ function CellModal({
           <h3 className="font-bold text-text">עריכת משבצת</h3>
           <button onClick={onClose} className="text-text-dim hover:text-text px-1">✕</button>
         </div>
-        <div>
-          <p className="text-xs text-text-dim mb-1">שמות מופרדים בפסיק</p>
-          <textarea
-            className="input w-full resize-none"
-            rows={3}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            autoFocus
-          />
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs text-text-dim mb-1">בחר אנשים מהרשימה (ניתן לבחור כמה)</p>
+            <div className="max-h-64 overflow-y-auto border border-bg-border rounded-xl p-2 space-y-1 bg-bg-base">
+              {sortedGuards.length === 0 && (
+                <p className="text-xs text-text-dim text-center py-4">אין אנשים – הוסף בלשונית "אנשים"</p>
+              )}
+              {sortedGuards.map((g) => {
+                const isSelected = selected.has(g.name);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => toggle(g.name)}
+                    className={`w-full flex items-center justify-between text-xs px-2 py-1.5 rounded-lg border
+                      ${isSelected ? "border-primary bg-primary/10 text-primary" : "border-bg-border bg-transparent text-text"}`}
+                  >
+                    <span className="truncate">{g.name}</span>
+                    {g.role && <span className="text-[10px] text-text-dim ml-2">{g.role}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedList.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-text-dim">נבחרו:</p>
+              <div className="flex flex-wrap gap-1">
+                {selectedList.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px]"
+                  >
+                    {name}
+                    {!guardsByName.has(name) && (
+                      <span className="text-[9px] text-warning">(לא קיים ברשימת אנשים)</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => toggle(name)}
+                      className="leading-none opacity-60 hover:opacity-100"
+                    >✕</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <button
             className="btn-primary flex-1"
-            onClick={() => {
-              const parsed = text.split(",").map((s) => s.trim()).filter(Boolean);
-              onSave(parsed);
-            }}
+            onClick={() => onSave(selectedList)}
           >
             שמור
           </button>
@@ -113,12 +167,22 @@ export default function ScheduleTab() {
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [editCell, setEditCell] = useState<{ ri: number; ci: number } | null>(null);
+  const [guards, setGuards] = useState<Guard[]>([]);
 
   useEffect(() => {
-    fetch(API)
-      .then((r) => r.json())
-      .then((data) => { setSchedule(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    async function load() {
+      try {
+        const [scheduleResp, guardsResp] = await Promise.all([
+          fetch(API).then((r) => r.json()),
+          getGuards(),
+        ]);
+        setSchedule(scheduleResp);
+        setGuards(guardsResp);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   function update(next: Schedule) {
@@ -133,15 +197,38 @@ export default function ScheduleTab() {
     update({ ...schedule, periods });
   }
 
-  function handleCellSave(ri: number, ci: number, names: string[]) {
+  async function handleCellSave(ri: number, ci: number, names: string[]) {
     if (!schedule) return;
     const rows = schedule.rows.map((row, r) =>
       r === ri
         ? { ...row, cells: row.cells.map((c, c2) => (c2 === ci ? names : c)) }
         : row
     );
-    update({ ...schedule, rows });
+    const next = { ...schedule, rows };
+    update(next);
     setEditCell(null);
+
+    // עדכון תפקיד ב-DB לפי שורת התפקיד
+    const rowRole = schedule.rows[ri]?.role;
+    if (!rowRole) return;
+    const nameSet = new Set(names);
+    const toUpdate = guards.filter((g) => nameSet.has(g.name) && g.role !== rowRole);
+    if (!toUpdate.length) return;
+    try {
+      await Promise.all(
+        toUpdate.map((g) =>
+          updateGuard(g.id, g.name, g.phone, rowRole)
+        )
+      );
+      // עדכון לוקאלי של רשימת ה-guards
+      setGuards((prev) =>
+        prev.map((g) =>
+          nameSet.has(g.name) ? { ...g, role: rowRole } : g
+        )
+      );
+    } catch {
+      // השארת השגיאה בשקט כדי לא לשבור את עריכת הלוח
+    }
   }
 
   function addColumn() {
@@ -205,7 +292,12 @@ export default function ScheduleTab() {
                     <div className="flex flex-col gap-0.5">
                       {names.length > 0 ? (
                         names.map((name, ni) => (
-                          <span key={ni} className="text-text text-xs leading-snug">
+                          <span
+                            key={ni}
+                            className={`inline-block px-2 py-0.5 rounded-md border text-xs font-medium ${
+                              ROLE_COLORS[row.role] ?? "text-text bg-bg-base/80 border-bg-border/80"
+                            }`}
+                          >
                             {name}
                           </span>
                         ))
@@ -224,6 +316,7 @@ export default function ScheduleTab() {
       {editCell && (
         <CellModal
           names={schedule.rows[editCell.ri].cells[editCell.ci]}
+          availableGuards={guards}
           onSave={(names) => handleCellSave(editCell.ri, editCell.ci, names)}
           onClose={() => setEditCell(null)}
         />
