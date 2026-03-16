@@ -6,6 +6,12 @@ __pycache__/
 .Python
 *.egg-info/
 .env
+*.env.local
+venv/
+.venv/
+dist/
+build/
+*.egg
 
 # Database
 *.db
@@ -13,13 +19,26 @@ __pycache__/
 
 # Node
 frontend/node_modules/
+frontend/.env.local
+frontend/.env.*.local
 
 # Build output (keep dist for deployment)
 # frontend/dist/
 
+# Logs
+*.log
+npm-debug.log*
+
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
