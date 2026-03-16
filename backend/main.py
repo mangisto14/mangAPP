@@ -1543,6 +1543,6 @@ if os.path.exists(_DIST):
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
         # Let real API routes handle themselves – only catch non-API paths for SPA
-        if full_path.startswith("api") :
+        if full_path.startswith("api") or full_path in ("docs", "redoc", "openapi.json"):
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(os.path.join(_DIST, "index.html"))
