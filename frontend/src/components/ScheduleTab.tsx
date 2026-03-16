@@ -8,12 +8,12 @@ type RowData = { role: string; cells: string[][] };
 type Schedule = { periods: string[]; rows: RowData[] };
 
 const ROLE_COLORS: Record<string, string> = {
-  "קצינים":  "bg-blue-500/10 border-blue-500/20 text-blue-300",
-  "מפקדים":  "bg-purple-500/10 border-purple-500/20 text-purple-300",
-  "פקחים":   "bg-emerald-500/10 border-emerald-500/20 text-emerald-300",
-  "נהגים":   "bg-amber-500/10 border-amber-500/20 text-amber-300",
-  "מטהרים":  "bg-rose-500/10 border-rose-500/20 text-rose-300",
-  "עתודאים": "bg-sky-500/10 border-sky-500/20 text-sky-300",
+  "קצינים":  "bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-300",
+  "מפקדים":  "bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300",
+  "פקחים":   "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300",
+  "נהגים":   "bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300",
+  "מטהרים":  "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-300",
+  "עתודאים": "bg-sky-500/10 border-sky-500/20 text-sky-700 dark:text-sky-300",
 };
 
 function saveSchedule(schedule: Schedule) {
