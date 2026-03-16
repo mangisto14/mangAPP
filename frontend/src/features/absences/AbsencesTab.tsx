@@ -217,6 +217,7 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
   );
 }
 
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
