@@ -217,6 +217,7 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
   );
 }
 
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
@@ -230,6 +231,8 @@ export default function AbsencesTab() {
   const [pendingBulkLeave, setPendingBulkLeave] = useState(false);
   const [settings, setSettings] = useState<Settings>({ alert_minutes: null, alert_thresholds: [] });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [outFilter, setOutFilter] = useState<"all" | "temp" | "absent">("all");
+  const ABSENT_REASONS = ["מחלה", "חופשה"];
   // tick to re-evaluate alert state every 30s
   const [, setTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -309,7 +312,20 @@ export default function AbsencesTab() {
     }
   }
 
-  const out = absences.filter((a) => a.is_out);
+  const tempOut = absences.filter(
+    (a) => a.is_out && (!a.reason || !ABSENT_REASONS.includes(a.reason))
+  );
+  
+  const absentOut = absences.filter(
+    (a) => a.is_out && a.reason && ABSENT_REASONS.includes(a.reason)
+  );
+  
+  const out =
+    outFilter === "temp"
+      ? tempOut
+      : outFilter === "absent"
+      ? absentOut
+      : [...tempOut, ...absentOut];
   const inside = absences.filter((a) => !a.is_out);
   const filteredInside = search
     ? inside.filter((a) => a.name.includes(search))
@@ -367,6 +383,38 @@ export default function AbsencesTab() {
                 </span>
               )}
             </h2>
+            <div className="flex gap-1 mb-3">
+              <button
+                onClick={() => setOutFilter("all")}
+                className={`px-3 py-1 text-xs rounded-md ${
+                  outFilter === "all"
+                    ? "bg-bg-card text-text shadow"
+                    : "text-text-dim"
+                }`}
+              >
+                הכל
+              </button>
+              <button
+                onClick={() => setOutFilter("temp")}
+                className={`px-3 py-1 text-xs rounded-md ${
+                  outFilter === "temp"
+                    ? "bg-bg-card text-text shadow"
+                    : "text-text-dim"
+                }`}
+              >
+                🚪 יצאו זמנית
+              </button>
+              <button
+                onClick={() => setOutFilter("absent")}
+                className={`px-3 py-1 text-xs rounded-md ${
+                  outFilter === "absent"
+                    ? "bg-bg-card text-text shadow"
+                    : "text-text-dim"
+                }`}
+              >
+                🏖 נעדרים
+              </button>
+            </div>  
             {out.length === 0 ? (
               <p className="text-text-dim text-sm text-center py-4">אין יוצאים כרגע</p>
             ) : (
@@ -555,4 +603,3 @@ export default function AbsencesTab() {
     </div>
   );
 }
-
