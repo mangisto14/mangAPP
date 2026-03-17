@@ -218,7 +218,28 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
 }
 
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Copy Names Button ─────────────────────────────────────────────────────────
+function CopyNamesButton({ names }: { names: string[] }) {
+  const [copied, setCopied] = useState(false);
+  if (!names.length) return null;
+  const handleCopy = () => {
+    navigator.clipboard.writeText(names.join(", "));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="text-xs text-text-dim hover:text-primary border border-bg-border hover:border-primary/40
+                 bg-bg-base px-2 py-0.5 rounded-lg transition-colors"
+      title="העתק שמות"
+    >
+      {copied ? "✓ הועתק" : "📋 העתק שמות"}
+    </button>
+  );
+}
+
+
 export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -375,14 +396,17 @@ export default function AbsencesTab() {
 
           {/* ── מחוץ למסגרת ── */}
           <div className="card">
-            <h2 className="font-bold text-base mb-3 flex items-center gap-2">
-              <span>🚪</span> מחוץ למסגרת
-              {out.length > 0 && (
-                <span className="bg-warning/20 text-warning text-xs font-bold px-2 py-0.5 rounded-full">
-                  {out.length}
-                </span>
-              )}
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-base flex items-center gap-2">
+                <span>🚪</span> מחוץ למסגרת
+                {out.length > 0 && (
+                  <span className="bg-warning/20 text-warning text-xs font-bold px-2 py-0.5 rounded-full">
+                    {out.length}
+                  </span>
+                )}
+              </h2>
+              <CopyNamesButton names={out.map((a) => a.name)} />
+            </div>
             <div className="flex gap-1 mb-3">
               <button
                 onClick={() => setOutFilter("all")}
@@ -483,6 +507,7 @@ export default function AbsencesTab() {
                   {inside.length}
                 </span>
               </h2>
+              <CopyNamesButton names={filteredInside.map((a) => a.name)} />
             </div>
 
             {/* Search */}
