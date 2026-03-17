@@ -333,8 +333,8 @@ export default function AddShiftTab({ onSaved }: Props) {
         <h2 className="font-bold text-text">הגדרת משמרת</h2>
 
         {/* Date + Time */}
-        <div className="flex gap-3">
-          <div style={{ width: "calc(100% - 7.5rem)" }}>
+        <div className="flex justify-between">
+          <div style={{ width: "58%" }}>
             <label className="text-xs text-text-dim mb-1 block">תאריך</label>
             <input
               type="date"
@@ -343,7 +343,7 @@ export default function AddShiftTab({ onSaved }: Props) {
               className="input text-sm w-full py-1.5"
             />
           </div>
-          <div style={{ width: "7rem", flexShrink: 0 }}>
+          <div style={{ width: "38%" }}>
             <label className="text-xs text-text-dim mb-1 block">שעה</label>
             <input
               type="time"
