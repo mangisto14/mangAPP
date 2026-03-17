@@ -333,24 +333,24 @@ export default function AddShiftTab({ onSaved }: Props) {
         <h2 className="font-bold text-text">הגדרת משמרת</h2>
 
         {/* Date + Time */}
-        <div className="grid gap-3" style={{ gridTemplateColumns: "3fr 2fr" }}>
-          <div className="min-w-0">
+        <div className="grid gap-2 overflow-hidden" style={{ gridTemplateColumns: "3fr 2fr" }}>
+          <div className="min-w-0 overflow-hidden">
             <label className="text-xs text-text-dim mb-1 block">תאריך</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="input text-sm w-full py-1.5"
+              className="input text-sm w-full py-1.5 min-w-0"
             />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 overflow-hidden">
             <label className="text-xs text-text-dim mb-1 block">שעה</label>
             <input
               type="time"
               value={time}
               step={1800}
               onChange={(e) => setTime(e.target.value)}
-              className="input text-sm w-full py-1.5"
+              className="input text-sm w-full py-1.5 min-w-0"
             />
           </div>
         </div>
