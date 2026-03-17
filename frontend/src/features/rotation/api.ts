@@ -60,3 +60,9 @@ export async function syncRotationGuards(): Promise<SyncResult> {
   if (!r.ok) throw new Error("שגיאה בסנכרון");
   return r.json();
 }
+
+export async function syncScheduleGuards(): Promise<SyncResult> {
+  const r = await fetch(`${BASE}/sync/schedule-guards`, { method: "POST" });
+  if (!r.ok) throw new Error("שגיאה בסנכרון לוח");
+  return r.json();
+}

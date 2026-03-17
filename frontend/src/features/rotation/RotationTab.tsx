@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pencil, Settings, PlusCircle, RefreshCw } from "lucide-react";
-import { getRotation, updateRotationSlots, syncRotationGuards } from "./api";
+import { getRotation, updateRotationSlots, syncRotationGuards, syncScheduleGuards } from "./api";
 import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
 import type { Guard } from "../../types";
@@ -261,6 +261,7 @@ export default function RotationTab() {
   const [showSettings, setShowSettings] = useState(false);
   const [extraWeeks, setExtraWeeks] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [syncingSchedule, setSyncingSchedule] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [guardNames, setGuardNames] = useState<string[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
@@ -286,11 +287,24 @@ export default function RotationTab() {
     try {
       const result = await syncRotationGuards();
       setSyncResult(result);
-      load(); // refresh guards with updated roles
+      load();
     } catch (e) {
       alert((e as Error).message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncSchedule = async () => {
+    setSyncingSchedule(true);
+    try {
+      const result = await syncScheduleGuards();
+      setSyncResult(result);
+      load();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSyncingSchedule(false);
     }
   };
 
@@ -355,7 +369,18 @@ export default function RotationTab() {
             title="סנכרן תפקידים בין סבב לכוח אדם"
           >
             <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
-            סנכרן
+            סנכרן סבב
+          </button>
+          <button
+            onClick={handleSyncSchedule}
+            disabled={syncingSchedule}
+            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
+                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
+                       hover:border-primary/40 transition-all disabled:opacity-50"
+            title="סנכרן תפקידים מלוח לכוח אדם"
+          >
+            <RefreshCw size={14} className={syncingSchedule ? "animate-spin" : ""} />
+            סנכרן לוח
           </button>
           <button
             onClick={() => setShowSettings(true)}

@@ -1424,22 +1424,97 @@ def update_rotation_slots(role_id: int, body: RotationSlotsUpdateBody):
     return {"ok": True}
 
 
+# ── Sync helpers ──────────────────────────────────────────────────────────────
+
+def _apply_sync(conn, name_to_roles: dict, guards_all: list) -> dict:
+    """
+    Given a name→{role_name,...} map (from rotation or schedule), match guards
+    using prefix matching and return a sync result dict.
+
+    Prefix rule: a rotation/schedule token T matches a guard G when
+      G["name"].startswith(T)  (case-insensitive, stripped)
+    If T matches multiple guards it becomes a conflict.
+    If multiple rotation tokens resolve to the same guard they also conflict.
+    Guards not matched at all are left unchanged.
+    """
+    # Build guard lookup: lower-cased name → guard row
+    guard_by_lower = {g["name"].lower(): g for g in guards_all}
+
+    # For each token in name_to_roles, find matching guards (prefix match)
+    # token_to_guard_roles: guard_name → {role_name, ...}
+    token_to_guard_roles: dict = {}  # guard_name -> set of roles
+    unresolved: list = []            # tokens that matched 0 or 2+ guards
+
+    for token, roles_set in name_to_roles.items():
+        token_lower = token.lower()
+        matches = [
+            g["name"] for g in guards_all
+            if g["name"].lower().startswith(token_lower)
+        ]
+        if len(matches) == 0:
+            unresolved.append(token)
+        elif len(matches) > 1:
+            # Ambiguous prefix — treat as conflict for all matched guards
+            for gname in matches:
+                for role_name in roles_set:
+                    token_to_guard_roles.setdefault(gname, set()).add(role_name)
+        else:
+            gname = matches[0]
+            for role_name in roles_set:
+                token_to_guard_roles.setdefault(gname, set()).add(role_name)
+
+    # Guards whose resolved roles conflict (appear in multiple roles)
+    conflicts = [
+        {"name": gname, "roles": list(roles_set)}
+        for gname, roles_set in token_to_guard_roles.items()
+        if len(roles_set) > 1
+    ]
+    conflict_guard_names = {c["name"] for c in conflicts}
+
+    # Update guards that have exactly one resolved role
+    updated = []
+    for gname, roles_set in token_to_guard_roles.items():
+        if gname in conflict_guard_names:
+            continue
+        new_role = next(iter(roles_set))
+        g = guard_by_lower.get(gname.lower())
+        if g is None:
+            continue
+        if g["role"] != new_role:
+            conn.execute(
+                _q("UPDATE guards SET role=? WHERE id=?"),
+                (new_role, g["id"]),
+            )
+            updated.append({
+                "name": g["name"],
+                "old_role": g["role"],
+                "new_role": new_role,
+            })
+
+    return {
+        "updated": updated,
+        "conflicts": conflicts,
+        "unknown_in_rotation": unresolved,
+    }
+
+
 # ── Sync rotation ↔ guards ────────────────────────────────────────────────────
 
 @app.post("/api/sync/rotation-guards")
 def sync_rotation_guards():
     """
-    Cross-reference rotation_slots ↔ guards:
+    Cross-reference rotation_slots ↔ guards using prefix matching:
     1. Build name→role map from rotation slots
-    2. Update each guard's role if their name appears in rotation
-    3. Return summary: updated, conflicts (name in multiple roles), unknown (in rotation but not in guards)
+    2. Match guards by prefix (e.g. "שלומי" matches "שלומי בן ישי")
+    3. Update each guard's role if uniquely resolved
+    4. Return summary: updated, conflicts, unknown tokens
     """
     with get_conn() as conn:
         roles = conn.execute("SELECT id, name FROM rotation_roles").fetchall()
         slots_all = conn.execute("SELECT role_id, names FROM rotation_slots").fetchall()
         guards_all = conn.execute("SELECT id, name, role FROM guards").fetchall()
 
-        # Build name → [role_name, ...] map from rotation
+        # Build name → {role_name, ...} map from rotation slots
         name_to_roles: dict = {}
         for slot in slots_all:
             role_name = next((r["name"] for r in roles if r["id"] == slot["role_id"]), None)
@@ -1451,40 +1526,39 @@ def sync_rotation_guards():
                     continue
                 name_to_roles.setdefault(name, set()).add(role_name)
 
-        guard_name_set = {g["name"] for g in guards_all}
+        return _apply_sync(conn, name_to_roles, guards_all)
 
-        # Names in rotation that don't exist in guards
-        unknown_in_rotation = [n for n in name_to_roles if n not in guard_name_set]
 
-        # Names appearing in multiple rotation roles (conflict)
-        conflicts = [
-            {"name": n, "roles": list(roles_set)}
-            for n, roles_set in name_to_roles.items()
-            if len(roles_set) > 1 and n in guard_name_set
-        ]
-        conflict_names = {c["name"] for c in conflicts}
+# ── Sync schedule ↔ guards ────────────────────────────────────────────────────
 
-        # Update guards: only if name appears in exactly one rotation role
-        updated = []
-        for g in guards_all:
-            if g["name"] in name_to_roles and g["name"] not in conflict_names:
-                new_role = next(iter(name_to_roles[g["name"]]))
-                if g["role"] != new_role:
-                    conn.execute(
-                        _q("UPDATE guards SET role=? WHERE id=?"),
-                        (new_role, g["id"]),
-                    )
-                    updated.append({
-                        "name": g["name"],
-                        "old_role": g["role"],
-                        "new_role": new_role,
-                    })
+@app.post("/api/sync/schedule-guards")
+def sync_schedule_guards():
+    """
+    Cross-reference schedule rows ↔ guards using prefix matching.
+    The schedule has rows: [{role: "קצינים", cells: [[name,...], ...]}, ...]
+    All unique names across all cells for a given role are used to assign that role.
+    """
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key='schedule_json'").fetchone()
+        guards_all = conn.execute("SELECT id, name, role FROM guards").fetchall()
 
-    return {
-        "updated": updated,
-        "conflicts": conflicts,
-        "unknown_in_rotation": unknown_in_rotation,
-    }
+    schedule = _json.loads(row["value"]) if row else _DEFAULT_SCHEDULE
+
+    # Build name → {role_name, ...} map from schedule rows
+    name_to_roles: dict = {}
+    for srow in schedule.get("rows", []):
+        role_name = srow.get("role", "").strip()
+        if not role_name:
+            continue
+        for cell in srow.get("cells", []):
+            for name in cell:
+                name = name.strip()
+                if not name:
+                    continue
+                name_to_roles.setdefault(name, set()).add(role_name)
+
+    with get_conn() as conn:
+        return _apply_sync(conn, name_to_roles, guards_all)
 
 
 # ── Schedule ──────────────────────────────────────────────────────────────────
