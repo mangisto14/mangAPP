@@ -5,81 +5,12 @@ import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
 import type { Guard } from "../../types";
 import type { RotationConfig } from "./types";
+import { computePeriods, PERIOD_CONFIG, PERIOD_COLORS } from "./utils";
+import type { Period } from "./utils";
 import EditRotationModal from "./EditRotationModal";
 import GuardAutocomplete from "./GuardAutocomplete";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
-
-function fmtShort(d: Date): string {
-  return `${d.getDate()}/${d.getMonth() + 1}`;
-}
-
-const PERIOD_CONFIG = [
-  { label: "א-ג", startDow: 0, days: 2 },
-  { label: "ג-ה", startDow: 2, days: 2 },
-  { label: "ו-א", startDow: 5, days: 2 },
-] as const;
-
-// צבעים לפי סוג תקופה: א-ג=כחול, ג-ה=כתום, ו-א=ירוק
-const PERIOD_COLORS = [
-  "bg-primary/10 border-primary/25 text-primary-light",
-  "bg-warning/10 border-warning/25 text-warning",
-  "bg-success/10 border-success/25 text-success",
-];
-
-interface Period {
-  start: Date;
-  end: Date;
-  slotIndex: number;   // 0–8 → maps directly to role.slots[slotIndex]
-  label: string;       // "08/3-10/3"
-  periodLabel: string; // "א-ג" | "ג-ה" | "ו-א"
-  periodIndex: number; // 0 | 1 | 2  (index in PERIOD_CONFIG → color)
-  isActive: boolean;
-}
-
-/**
- * Compute `count` periods starting from the current 3-week cycle.
- * slotIndex = position in the flat list (0, 1, 2, …), no rotation modulo.
- */
-function computePeriods(startDate: string, count: number): Period[] {
-  const origin = new Date(startDate + "T00:00:00");
-  const now = new Date();
-
-  // Cycle anchor = first Sunday on/after origin
-  const originDow = origin.getDay();
-  const daysToSunday = originDow === 0 ? 0 : 7 - originDow;
-  const anchor = addDays(origin, daysToSunday);
-
-  // Which 3-week cycle (21 days) contains today?
-  const daysSinceAnchor = Math.floor((now.getTime() - anchor.getTime()) / 86400000);
-  const cycleNumber = Math.max(0, Math.floor(daysSinceAnchor / 21));
-  const cycleStart = addDays(anchor, cycleNumber * 21);
-
-  const periods: Period[] = [];
-  for (let i = 0; i < count; i++) {
-    const w = Math.floor(i / 3);
-    const p = i % 3;
-    const pc = PERIOD_CONFIG[p];
-    const start = addDays(addDays(cycleStart, w * 7), pc.startDow);
-    const end = addDays(start, 2);
-    periods.push({
-      start,
-      end,
-      slotIndex: i,
-      label: `${fmtShort(start)}-${fmtShort(end)}`,
-      periodLabel: pc.label,
-      periodIndex: p,
-      isActive: now >= start && now < end,
-    });
-  }
-  return periods;
-}
 
 // ── EditPeriodModal ────────────────────────────────────────────────────────────
 

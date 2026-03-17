@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, CheckCircle, XCircle, Sparkles, AlertTriangle } from "lucide-react";
 import { getGuards, addShifts, getSuggest } from "../api";
 import type { Guard, StagedShift, Suggestion } from "../types";
+import { getRotation } from "../features/rotation/api";
+import { computePeriods } from "../features/rotation/utils";
+import type { RotationConfig } from "../features/rotation/types";
+import { getAbsences } from "../features/absences/api";
+import type { AbsenceStatus } from "../features/absences/types";
 
 function toLocalIso(date: string, time: string) {
   return `${date}T${time}:00`;
@@ -53,11 +58,62 @@ export default function AddShiftTab({ onSaved }: Props) {
   const [showSuggest, setShowSuggest] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
+  const [rotation, setRotation] = useState<RotationConfig | null>(null);
+  const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
 
   useEffect(() => {
     getGuards().then(setGuards).catch(console.error);
     getSuggest(3).then(setSuggestions).catch(console.error);
+    getRotation().then(setRotation).catch(console.error);
+    getAbsences().then(setAbsences).catch(console.error);
   }, []);
+
+  // Names from rotation slots for the selected date (lowercased)
+  const rotationNamesForDate = useMemo(() => {
+    if (!rotation || !date) return new Set<string>();
+    const periods = computePeriods(rotation.start_date, 60);
+    const target = new Date(date + "T00:00:00");
+    const period = periods.find((p) => target >= p.start && target < p.end);
+    if (!period) return new Set<string>();
+    const names = new Set<string>();
+    rotation.roles.forEach((role) => {
+      const idx = period.slotIndex % (role.slots.length || 1);
+      (role.slots[idx] ?? []).forEach((n) => names.add(n.trim().toLowerCase()));
+    });
+    return names;
+  }, [rotation, date]);
+
+  // Guards currently absent (is_out=true) — lowercased names
+  const absentNames = useMemo(
+    () => new Set(absences.filter((a) => a.is_out).map((a) => a.name.toLowerCase())),
+    [absences]
+  );
+
+  // Guard availability status for the selected date
+  type GuardStatus = "rotation-available" | "rotation-absent" | "absent" | "default";
+  function guardStatus(name: string): GuardStatus {
+    const lower = name.toLowerCase();
+    const inRotation = [...rotationNamesForDate].some(
+      (r) => lower.startsWith(r) || r.startsWith(lower)
+    );
+    const isAbsent = absentNames.has(lower);
+    if (inRotation && !isAbsent) return "rotation-available";
+    if (inRotation && isAbsent) return "rotation-absent";
+    if (isAbsent) return "absent";
+    return "default";
+  }
+
+  const STATUS_ORDER: Record<GuardStatus, number> = {
+    "rotation-available": 0,
+    "default": 1,
+    "rotation-absent": 2,
+    "absent": 3,
+  };
+
+  const sortedGuards = useMemo(
+    () => [...guards].sort((a, b) => STATUS_ORDER[guardStatus(a.name)] - STATUS_ORDER[guardStatus(b.name)]),
+    [guards, rotationNamesForDate, absentNames]
+  );
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -244,43 +300,67 @@ export default function AddShiftTab({ onSaved }: Props) {
 
         {/* Guards Checkboxes */}
         <div>
-          <label className="text-xs text-text-dim mb-2 block">
-            בחר שומרים ({selected.size} נבחרו)
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs text-text-dim">
+              בחר שומרים ({selected.size} נבחרו)
+            </label>
+            {rotation && (
+              <div className="flex items-center gap-2 text-[10px] text-text-dim">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block"/>בסבב+זמין</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-warning inline-block"/>בסבב+יצא</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block"/>יצא</span>
+              </div>
+            )}
+          </div>
           {guards.length === 0 && (
             <p className="text-text-dim text-sm">אין שומרים – הוסף בלשונית 👥</p>
           )}
           <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-            {guards.map((g) => (
-              <label
-                key={g.id}
-                className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border transition-all
-                  ${
-                    selected.has(g.name)
-                      ? "bg-primary/10 border-primary/40"
-                      : "bg-bg-base border-bg-border hover:border-bg-border/80"
-                  }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.has(g.name)}
-                  onChange={() => toggleGuard(g.name)}
-                  className="w-4 h-4 accent-primary"
-                />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-text truncate flex items-center gap-1">
-                    {g.name}
-                    {g.overloaded && (
-                      <AlertTriangle size={12} className="text-warning flex-shrink-0" />
-                    )}
+            {sortedGuards.map((g) => {
+              const status = guardStatus(g.name);
+              const isSelected = selected.has(g.name);
+              const statusClass =
+                isSelected
+                  ? "bg-primary/10 border-primary/40"
+                  : status === "rotation-available"
+                  ? "bg-success/10 border-success/40"
+                  : status === "rotation-absent"
+                  ? "bg-warning/10 border-warning/40"
+                  : status === "absent"
+                  ? "bg-danger/10 border-danger/40"
+                  : "bg-bg-base border-bg-border hover:border-bg-border/80";
+              return (
+                <label
+                  key={g.id}
+                  className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer border transition-all ${statusClass}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleGuard(g.name)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-text truncate flex items-center gap-1">
+                      {g.name}
+                      {g.overloaded && (
+                        <AlertTriangle size={12} className="text-warning flex-shrink-0" />
+                      )}
+                      {status === "absent" && (
+                        <span className="text-danger text-[10px] font-bold">יצא</span>
+                      )}
+                      {status === "rotation-absent" && (
+                        <span className="text-warning text-[10px] font-bold">יצא</span>
+                      )}
+                    </div>
+                    <div className="flex gap-1 mt-0.5">
+                      <span className="pill-past">✅ {g.past}</span>
+                      <span className="pill-future">🕐 {g.future}</span>
+                    </div>
                   </div>
-                  <div className="flex gap-1 mt-0.5">
-                    <span className="pill-past">✅ {g.past}</span>
-                    <span className="pill-future">🕐 {g.future}</span>
-                  </div>
-                </div>
-              </label>
-            ))}
+                </label>
+              );
+            })}
           </div>
         </div>
 
