@@ -90,8 +90,27 @@ export default function AddShiftTab({ onSaved }: Props) {
     return names;
   }, [rotation, date]);
 
-  // Names of soldiers whose rotation period ENDS on the selected date (יוצאים לחופש)
-  const rotationExitingNames = useMemo(() => {
+  // Names of soldiers whose rotation period STARTS on the selected date (יוצאים לסבב היום)
+  const rotationStartingNames = useMemo(() => {
+    if (!rotation || !date) return new Set<string>();
+    const periods = computePeriods(rotation.start_date, 60);
+    const target = new Date(date + "T00:00:00");
+    const startPeriod = periods.find(
+      (p) => p.start.getFullYear() === target.getFullYear() &&
+             p.start.getMonth() === target.getMonth() &&
+             p.start.getDate() === target.getDate()
+    );
+    if (!startPeriod) return new Set<string>();
+    const names = new Set<string>();
+    rotation.roles.forEach((role) => {
+      const idx = startPeriod.slotIndex % (role.slots.length || 1);
+      (role.slots[idx] ?? []).forEach((n) => names.add(n.trim().toLowerCase()));
+    });
+    return names;
+  }, [rotation, date]);
+
+  // Names of soldiers whose rotation period ENDS on the selected date (חוזרים מסבב היום)
+  const rotationReturningNames = useMemo(() => {
     if (!rotation || !date) return new Set<string>();
     const periods = computePeriods(rotation.start_date, 60);
     const target = new Date(date + "T00:00:00");
@@ -133,34 +152,39 @@ export default function AddShiftTab({ onSaved }: Props) {
     [absences]
   );
 
-  type GuardStatus = "rotation-available" | "rotation-absent" | "rotation-temp" | "rotation-exit" | "absent" | "temp-out" | "default";
+  type GuardStatus = "rotation-available" | "rotation-start" | "rotation-returning" | "rotation-absent" | "rotation-temp" | "absent" | "temp-out" | "default";
   function guardStatus(name: string): GuardStatus {
     const lower = name.toLowerCase();
     const inRotation = [...rotationNamesForDate].some(
       (r) => lower.startsWith(r) || r.startsWith(lower)
     );
-    const isExiting = [...rotationExitingNames].some(
+    const isStarting = [...rotationStartingNames].some(
+      (r) => lower.startsWith(r) || r.startsWith(lower)
+    );
+    const isReturning = [...rotationReturningNames].some(
       (r) => lower.startsWith(r) || r.startsWith(lower)
     );
     const isAbsent = absentNames.has(lower);
     const isTempOut = tempOutNames.has(lower);
-    if (inRotation && !isAbsent && !isTempOut) return "rotation-available";
+    if (inRotation && isStarting) return "rotation-start";   // יום יציאה לסבב
+    if (inRotation && !isAbsent && !isTempOut) return "rotation-available"; // בחופש סבב
     if (inRotation && isAbsent) return "rotation-absent";
     if (inRotation && isTempOut) return "rotation-temp";
-    if (isExiting) return "rotation-exit";
+    if (isReturning) return "rotation-returning";            // יום חזרה מסבב
     if (isAbsent) return "absent";
     if (isTempOut) return "temp-out";
     return "default";
   }
 
   const STATUS_ORDER: Record<GuardStatus, number> = {
-    "default": 0,          // זמין
-    "temp-out": 1,         // יצא זמנית
-    "rotation-available": 2, // בחופש סבב
-    "rotation-exit": 3,
-    "rotation-temp": 4,
-    "rotation-absent": 5,
-    "absent": 6,
+    "default": 0,             // זמין
+    "rotation-returning": 1,  // חוזר מסבב היום
+    "temp-out": 2,            // יצא זמנית
+    "rotation-available": 3,  // בחופש סבב
+    "rotation-start": 4,      // יוצא לסבב היום
+    "rotation-temp": 5,
+    "rotation-absent": 6,
+    "absent": 7,
   };
 
   const sortedGuards = useMemo(
@@ -360,7 +384,7 @@ export default function AddShiftTab({ onSaved }: Props) {
             {rotation && (
               <div className="flex items-center gap-2 text-[10px] text-text-dim">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block"/>זמין</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-warning inline-block"/>יצא זמנית</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-warning inline-block"/>חוזר/יצא</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block"/>בחופש/נעדר</span>
               </div>
             )}
@@ -377,7 +401,9 @@ export default function AddShiftTab({ onSaved }: Props) {
                   ? "bg-primary/10 border-primary/40"
                   : status === "default"
                   ? "bg-success/10 border-success/40"
-                  : status === "rotation-available" || status === "rotation-absent" || status === "rotation-exit" || status === "absent"
+                  : status === "rotation-returning"
+                  ? "bg-warning/10 border-warning/40"
+                  : status === "rotation-available" || status === "rotation-start" || status === "rotation-absent" || status === "absent"
                   ? "bg-danger/10 border-danger/40"
                   : status === "rotation-temp" || status === "temp-out"
                   ? "bg-warning/10 border-warning/40"
@@ -402,14 +428,17 @@ export default function AddShiftTab({ onSaved }: Props) {
                       {status === "default" && (
                         <span className="text-success text-[10px] font-bold">זמין</span>
                       )}
-                      {(status === "rotation-available" || status === "rotation-temp") && (
+                      {status === "rotation-start" && (
+                        <span className="text-danger text-[10px] font-bold">יוצא לסבב</span>
+                      )}
+                      {status === "rotation-available" && (
                         <span className="text-danger text-[10px] font-bold">בחופש</span>
                       )}
-                      {(status === "absent" || status === "rotation-absent") && (
-                        <span className="text-danger text-[10px] font-bold">נעדר</span>
+                      {status === "rotation-returning" && (
+                        <span className="text-warning text-[10px] font-bold">חוזר מסבב</span>
                       )}
-                      {status === "rotation-exit" && (
-                        <span className="text-danger text-[10px] font-bold">יוצא לסבב</span>
+                      {(status === "absent" || status === "rotation-absent" || status === "rotation-temp") && (
+                        <span className="text-danger text-[10px] font-bold">נעדר</span>
                       )}
                       {status === "temp-out" && (
                         <span className="text-warning text-[10px] font-bold">יצא</span>
