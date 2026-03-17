@@ -1191,6 +1191,29 @@ def reset_absence(body: AbsenceActionBody):
     return {"ok": True}
 
 
+@app.get("/api/absences/active-on")
+def absences_active_on(date: str):
+    """
+    Return absences that were ACTIVE on the given date (YYYY-MM-DD).
+    Overlap query: left_at <= date AND (returned_at IS NULL OR returned_at >= date)
+    """
+    day_start = date + "T00:00:00"
+    day_end   = date + "T23:59:59"
+    with get_conn() as conn:
+        ph = "%s" if IS_PG else "?"
+        rows = conn.execute(
+            f"""
+            SELECT g.name, a.reason
+            FROM absences a
+            JOIN guards g ON g.id = a.guard_id
+            WHERE a.left_at <= {ph}
+              AND (a.returned_at IS NULL OR a.returned_at >= {ph})
+            """,
+            (day_end, day_start),
+        ).fetchall()
+    return [{"name": r["name"], "reason": r["reason"]} for r in rows]
+
+
 @app.get("/api/absences/history")
 def absences_history(
     guard_id: Optional[int] = None,

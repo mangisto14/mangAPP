@@ -5,7 +5,7 @@ import type { Guard, StagedShift, Suggestion } from "../types";
 import { getRotation } from "../features/rotation/api";
 import { computePeriods } from "../features/rotation/utils";
 import type { RotationConfig } from "../features/rotation/types";
-import { getAbsences } from "../features/absences/api";
+import { getAbsences, getAbsencesActiveOn } from "../features/absences/api";
 import type { AbsenceStatus } from "../features/absences/types";
 
 function toLocalIso(date: string, time: string) {
@@ -60,6 +60,7 @@ export default function AddShiftTab({ onSaved }: Props) {
   const [toast, setToast] = useState("");
   const [rotation, setRotation] = useState<RotationConfig | null>(null);
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
+  const [activeOnAbsences, setActiveOnAbsences] = useState<{ name: string; reason: string | null }[]>([]);
 
   useEffect(() => {
     getGuards().then(setGuards).catch(console.error);
@@ -68,9 +69,10 @@ export default function AddShiftTab({ onSaved }: Props) {
     getAbsences().then(setAbsences).catch(console.error);
   }, []);
 
-  // רענן יציאות כשהתאריך משתנה (עדכניות לגבי יצאו עתידיים)
+  // כשהתאריך משתנה: רענן יציאות נוכחיות (לצבע כתום) + חופשות שחופפות לתאריך (לצבע אדום)
   useEffect(() => {
     getAbsences().then(setAbsences).catch(console.error);
+    if (date) getAbsencesActiveOn(date).then(setActiveOnAbsences).catch(console.error);
   }, [date]);
 
   // Names from rotation slots for the selected date (lowercased)
@@ -90,15 +92,15 @@ export default function AddShiftTab({ onSaved }: Props) {
 
   const ABSENT_REASONS = ["חופשה", "מחלה"];
 
-  // אדום: יצא בגלל חופשה/מחלה
+  // אדום: חופשות/מחלות שחופפות לתאריך הנבחר (כולל שנכנסו לפני התאריך)
   const absentNames = useMemo(
     () =>
       new Set(
-        absences
-          .filter((a) => a.is_out && a.reason && ABSENT_REASONS.includes(a.reason))
+        activeOnAbsences
+          .filter((a) => a.reason && ABSENT_REASONS.includes(a.reason))
           .map((a) => a.name.toLowerCase())
       ),
-    [absences]
+    [activeOnAbsences]
   );
 
   // כתום: יצא מסיבה אחרת (רופא, אישי, אחר, ללא סיבה)

@@ -16,6 +16,9 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
 
 export const getAbsences = () => req<AbsenceStatus[]>("/absences");
 
+export const getAbsencesActiveOn = (date: string) =>
+  req<{ name: string; reason: string | null }[]>(`/absences/active-on?date=${date}`);
+
 export const markLeave = (guard_id: number, reason?: string) =>
   req<{ ok: boolean }>("/absences/leave", {
     method: "POST",
