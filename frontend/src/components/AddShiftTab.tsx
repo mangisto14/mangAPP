@@ -286,7 +286,7 @@ export default function AddShiftTab({ onSaved }: Props) {
 
         {/* Date + Time */}
         <div className="flex gap-2">
-          <div className="flex-1 min-w-0">
+          <div style={{ flex: "0 0 58%" }} className="min-w-0">
             <label className="text-xs text-text-dim mb-1 block">תאריך</label>
             <input
               type="date"
