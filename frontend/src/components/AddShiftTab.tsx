@@ -83,9 +83,15 @@ export default function AddShiftTab({ onSaved }: Props) {
     return names;
   }, [rotation, date]);
 
-  // Guards currently absent (is_out=true) — lowercased names
+  // Guards absent due to חופשה/מחלה — lowercased names
+  const ABSENT_REASONS = ["חופשה", "מחלה"];
   const absentNames = useMemo(
-    () => new Set(absences.filter((a) => a.is_out).map((a) => a.name.toLowerCase())),
+    () =>
+      new Set(
+        absences
+          .filter((a) => a.is_out && a.reason && ABSENT_REASONS.includes(a.reason))
+          .map((a) => a.name.toLowerCase())
+      ),
     [absences]
   );
 
