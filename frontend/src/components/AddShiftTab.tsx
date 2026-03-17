@@ -343,7 +343,7 @@ export default function AddShiftTab({ onSaved }: Props) {
               className="input text-sm w-full py-1.5"
             />
           </div>
-          <div style={{ width: "30%" }}>
+          <div style={{ width: "27%" }}>
             <label className="text-xs text-text-dim mb-1 block">שעה</label>
             <input
               type="time"
