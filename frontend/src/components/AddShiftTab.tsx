@@ -154,11 +154,11 @@ export default function AddShiftTab({ onSaved }: Props) {
   }
 
   const STATUS_ORDER: Record<GuardStatus, number> = {
-    "rotation-available": 0,
-    "default": 1,
-    "temp-out": 2,
-    "rotation-temp": 3,
-    "rotation-exit": 4,
+    "default": 0,          // זמין
+    "temp-out": 1,         // יצא זמנית
+    "rotation-available": 2, // בחופש סבב
+    "rotation-exit": 3,
+    "rotation-temp": 4,
     "rotation-absent": 5,
     "absent": 6,
   };
@@ -361,7 +361,7 @@ export default function AddShiftTab({ onSaved }: Props) {
               <div className="flex items-center gap-2 text-[10px] text-text-dim">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success inline-block"/>זמין</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-warning inline-block"/>יצא זמנית</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block"/>לא זמין</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-danger inline-block"/>בחופש/נעדר</span>
               </div>
             )}
           </div>
@@ -375,9 +375,9 @@ export default function AddShiftTab({ onSaved }: Props) {
               const statusClass =
                 isSelected
                   ? "bg-primary/10 border-primary/40"
-                  : status === "rotation-available"
+                  : status === "default"
                   ? "bg-success/10 border-success/40"
-                  : status === "rotation-absent" || status === "absent" || status === "rotation-exit"
+                  : status === "rotation-available" || status === "rotation-absent" || status === "rotation-exit" || status === "absent"
                   ? "bg-danger/10 border-danger/40"
                   : status === "rotation-temp" || status === "temp-out"
                   ? "bg-warning/10 border-warning/40"
@@ -399,8 +399,11 @@ export default function AddShiftTab({ onSaved }: Props) {
                       {g.overloaded && (
                         <AlertTriangle size={12} className="text-warning flex-shrink-0" />
                       )}
-                      {status === "rotation-available" && (
+                      {status === "default" && (
                         <span className="text-success text-[10px] font-bold">זמין</span>
+                      )}
+                      {(status === "rotation-available" || status === "rotation-temp") && (
+                        <span className="text-danger text-[10px] font-bold">בחופש</span>
                       )}
                       {(status === "absent" || status === "rotation-absent") && (
                         <span className="text-danger text-[10px] font-bold">נעדר</span>
@@ -408,7 +411,7 @@ export default function AddShiftTab({ onSaved }: Props) {
                       {status === "rotation-exit" && (
                         <span className="text-danger text-[10px] font-bold">יוצא לסבב</span>
                       )}
-                      {(status === "temp-out" || status === "rotation-temp") && (
+                      {status === "temp-out" && (
                         <span className="text-warning text-[10px] font-bold">יצא</span>
                       )}
                     </div>
