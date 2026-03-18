@@ -4,7 +4,7 @@ const BASE = (import.meta.env.VITE_API_URL ?? "") + "/api";
 
 export async function getRotation(): Promise<RotationConfig> {
   const r = await fetch(`${BASE}/rotation`);
-  if (!r.ok) throw new Error("שגיאה בטעינת הסבב");
+  if (!r.ok) throw new Error("Failed to load rotation");
   return r.json();
 }
 
@@ -14,7 +14,16 @@ export async function updateRotationConfig(start_date: string, period_days: numb
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ start_date, period_days }),
   });
-  if (!r.ok) throw new Error("שגיאה בעדכון הגדרות הסבב");
+  if (!r.ok) throw new Error("Failed to update rotation config");
+}
+
+export async function updateRotationPeriod(slotNum: number, start_date: string, end_date: string) {
+  const r = await fetch(`${BASE}/rotation/periods/${slotNum}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start_date, end_date }),
+  });
+  if (!r.ok) throw new Error("Failed to update period range");
 }
 
 export async function addRotationRole(name: string) {
@@ -23,7 +32,7 @@ export async function addRotationRole(name: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
-  if (!r.ok) throw new Error("שגיאה בהוספת תפקיד");
+  if (!r.ok) throw new Error("Failed to add role");
 }
 
 export async function updateRotationRole(id: number, name: string) {
@@ -32,12 +41,12 @@ export async function updateRotationRole(id: number, name: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
-  if (!r.ok) throw new Error("שגיאה בעדכון תפקיד");
+  if (!r.ok) throw new Error("Failed to update role");
 }
 
 export async function deleteRotationRole(id: number) {
   const r = await fetch(`${BASE}/rotation/roles/${id}`, { method: "DELETE" });
-  if (!r.ok) throw new Error("שגיאה במחיקת תפקיד");
+  if (!r.ok) throw new Error("Failed to delete role");
 }
 
 export async function updateRotationSlots(roleId: number, slots: string[][]) {
@@ -46,7 +55,7 @@ export async function updateRotationSlots(roleId: number, slots: string[][]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ slots }),
   });
-  if (!r.ok) throw new Error("שגיאה בעדכון קבוצות");
+  if (!r.ok) throw new Error("Failed to update groups");
 }
 
 export interface SyncResult {
@@ -57,12 +66,13 @@ export interface SyncResult {
 
 export async function syncRotationGuards(): Promise<SyncResult> {
   const r = await fetch(`${BASE}/sync/rotation-guards`, { method: "POST" });
-  if (!r.ok) throw new Error("שגיאה בסנכרון");
+  if (!r.ok) throw new Error("Failed to sync rotation");
   return r.json();
 }
 
 export async function syncScheduleGuards(): Promise<SyncResult> {
   const r = await fetch(`${BASE}/sync/schedule-guards`, { method: "POST" });
-  if (!r.ok) throw new Error("שגיאה בסנכרון לוח");
+  if (!r.ok) throw new Error("Failed to sync schedule");
   return r.json();
 }
+

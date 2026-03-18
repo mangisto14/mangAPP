@@ -5,9 +5,16 @@ export interface RotationRole {
   slots: string[][]; // [slot0_names, slot1_names, slot2_names]
 }
 
+export interface RotationPeriodRange {
+  slot_num: number;
+  start_date: string; // "YYYY-MM-DD"
+  end_date: string;   // "YYYY-MM-DD" (exclusive end boundary)
+}
+
 export interface RotationConfig {
   start_date: string;   // "YYYY-MM-DD"
   period_days: number;
+  periods: RotationPeriodRange[];
   roles: RotationRole[];
 }
 

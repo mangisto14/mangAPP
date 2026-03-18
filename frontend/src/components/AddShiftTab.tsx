@@ -78,7 +78,7 @@ export default function AddShiftTab({ onSaved }: Props) {
   // Names from rotation slots for the selected date (lowercased)
   const rotationNamesForDate = useMemo(() => {
     if (!rotation || !date) return new Set<string>();
-    const periods = computePeriods(rotation.start_date, 60);
+    const periods = computePeriods(rotation, 60);
     const target = new Date(date + "T00:00:00");
     const period = periods.find((p) => target >= p.start && target < p.end);
     if (!period) return new Set<string>();
@@ -93,7 +93,7 @@ export default function AddShiftTab({ onSaved }: Props) {
   // Names of soldiers whose rotation period STARTS on the selected date (יוצאים לסבב היום)
   const rotationStartingNames = useMemo(() => {
     if (!rotation || !date) return new Set<string>();
-    const periods = computePeriods(rotation.start_date, 60);
+    const periods = computePeriods(rotation, 60);
     const target = new Date(date + "T00:00:00");
     const startPeriod = periods.find(
       (p) => p.start.getFullYear() === target.getFullYear() &&
@@ -112,7 +112,7 @@ export default function AddShiftTab({ onSaved }: Props) {
   // Names of soldiers whose rotation period ENDS on the selected date (חוזרים מסבב היום)
   const rotationReturningNames = useMemo(() => {
     if (!rotation || !date) return new Set<string>();
-    const periods = computePeriods(rotation.start_date, 60);
+    const periods = computePeriods(rotation, 60);
     const target = new Date(date + "T00:00:00");
     const exitPeriod = periods.find(
       (p) => p.end.getFullYear() === target.getFullYear() &&

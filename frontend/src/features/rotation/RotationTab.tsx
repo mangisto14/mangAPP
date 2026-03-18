@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown } from "lucide-react";
-import { getRotation, updateRotationSlots, syncRotationGuards, syncScheduleGuards } from "./api";
+﻿import { useEffect, useRef, useState } from "react";
+import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown, CalendarDays } from "lucide-react";
+import {
+  getRotation,
+  updateRotationSlots,
+  syncRotationGuards,
+  syncScheduleGuards,
+  updateRotationPeriod,
+} from "./api";
 import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
 import type { Guard } from "../../types";
@@ -95,6 +101,115 @@ function EditPeriodModal({ config, period, guardNames, guards, onClose, onSaved 
         <div className="p-5 border-t border-bg-border shrink-0">
           <button onClick={handleSave} disabled={saving} className="btn-primary w-full">
             {saving ? "שומר..." : "💾 שמור שינויים"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface EditPeriodRangeProps {
+  config: RotationConfig;
+  period: Period;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function dateInputValue(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRangeProps) {
+  const [newPeriodStart, setNewPeriodStart] = useState(dateInputValue(period.start));
+  const [newPeriodEnd, setNewPeriodEnd] = useState(dateInputValue(period.end));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
+    if (!newPeriodStart || !newPeriodEnd) {
+      setError("יש להזין תאריך התחלה וסיום");
+      return;
+    }
+    if (newPeriodEnd <= newPeriodStart) {
+      setError("תאריך סיום חייב להיות אחרי תאריך ההתחלה");
+      return;
+    }
+    const nextStart = new Date(`${newPeriodStart}T00:00:00`).getTime();
+    const nextEnd = new Date(`${newPeriodEnd}T00:00:00`).getTime();
+    const overlapping = (config.periods ?? []).find((p) => {
+      if (p.slot_num === period.slotIndex) return false;
+      const otherStart = new Date(`${p.start_date}T00:00:00`).getTime();
+      const otherEnd = new Date(`${p.end_date}T00:00:00`).getTime();
+      return nextStart < otherEnd && nextEnd > otherStart;
+    });
+    if (overlapping) {
+      setError(`הטווח חופף לתקופה ${overlapping.slot_num + 1}: ${overlapping.start_date} עד ${overlapping.end_date}`);
+      return;
+    }
+    const message = `לעדכן את טווח החופשה של ${period.periodLabel} ל-${newPeriodStart} עד ${newPeriodEnd}?`;
+    if (!window.confirm(message)) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      await updateRotationPeriod(period.slotIndex, newPeriodStart, newPeriodEnd);
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
+      <div
+        className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in
+                   max-w-2xl mx-auto max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-bg-border shrink-0">
+          <h2 className="font-bold text-text text-lg">עדכון טווח חופשה לתקופה</h2>
+          <button onClick={onClose} className="text-text-dim hover:text-text text-xl px-2">✕</button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          <div className="card space-y-2">
+            <div className="text-xs text-text-dim">טווח נוכחי</div>
+            <div className="text-sm font-semibold text-text">{period.label} · {period.periodLabel}</div>
+          </div>
+          <div>
+            <label className="text-xs text-text-dim mb-1 block">תאריך התחלה חדש לתקופה</label>
+            <input
+              type="date"
+              value={newPeriodStart}
+              onChange={(e) => setNewPeriodStart(e.target.value)}
+              className="input text-sm w-full"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-dim mb-1 block">תאריך סיום חדש לתקופה</label>
+            <input
+              type="date"
+              value={newPeriodEnd}
+              onChange={(e) => setNewPeriodEnd(e.target.value)}
+              className="input text-sm w-full"
+            />
+          </div>
+          <div className="text-xs text-text-dim bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
+            השינוי נשמר בנפרד לתקופה זו בלבד.
+          </div>
+          {error && (
+            <div className="text-danger text-sm bg-danger/10 border border-danger/30 rounded-xl p-3">
+              {error}
+            </div>
+          )}
+        </div>
+        <div className="p-5 border-t border-bg-border shrink-0">
+          <button onClick={handleSave} disabled={saving} className="btn-primary w-full">
+            {saving ? "שומר..." : "אישור ועדכון טווח"}
           </button>
         </div>
       </div>
@@ -197,6 +312,7 @@ export default function RotationTab() {
   const [guardNames, setGuardNames] = useState<string[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
+  const [editRangePeriod, setEditRangePeriod] = useState<Period | null>(null);
   const [showSyncMenu, setShowSyncMenu] = useState(false);
   const activePeriodRef = useRef<HTMLTableCellElement>(null);
 
@@ -242,8 +358,6 @@ export default function RotationTab() {
   };
 
   useEffect(() => { load(); }, []);
-
-  // Scroll to active period after data loads
   useEffect(() => {
     if (!loading && activePeriodRef.current) {
       activePeriodRef.current.scrollIntoView({ inline: "center", behavior: "smooth", block: "nearest" });
@@ -254,7 +368,7 @@ export default function RotationTab() {
   if (error || !config) return <div className="fade-in card border-danger/30 text-danger">{error || "שגיאה"}</div>;
 
   const numPeriods = 9 + extraWeeks * 3;
-  const periods = computePeriods(config.start_date, numPeriods);
+  const periods = computePeriods(config, numPeriods);
   const activePeriod = periods.find((p) => p.isActive);
 
   // Build name → role map for mismatch detection
@@ -411,18 +525,33 @@ export default function RotationTab() {
                     }`}
                 >
                   <div className="flex flex-col items-center gap-0.5">
-                    <span>{p.label}</span>
+                    <button
+                      onClick={() => setEditRangePeriod(p)}
+                      className="hover:text-primary transition-colors underline decoration-dotted underline-offset-2"
+                      title="עדכון טווח תאריכים לחופשה"
+                    >
+                      {p.label}
+                    </button>
                     <span className={`text-[10px] font-normal
                       ${p.isActive ? "text-primary-light" : "text-text-dim/60"}`}>
                       {p.periodLabel}
                     </span>
-                    <button
-                      onClick={() => setEditSlot(p.slotIndex)}
-                      className="mt-0.5 p-0.5 text-text-dim/40 hover:text-primary transition-colors"
-                      title="ערוך תקופה"
-                    >
-                      <Pencil size={10} />
-                    </button>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <button
+                        onClick={() => setEditRangePeriod(p)}
+                        className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
+                        title="עדכן טווח תאריכים"
+                      >
+                        <CalendarDays size={10} />
+                      </button>
+                      <button
+                        onClick={() => setEditSlot(p.slotIndex)}
+                        className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
+                        title="ערוך תקופה"
+                      >
+                        <Pencil size={10} />
+                      </button>
+                    </div>
                   </div>
                 </th>
               ))}
@@ -431,7 +560,7 @@ export default function RotationTab() {
           <tbody>
             {config.roles.map((role) => (
               <tr key={role.id} className="border-t border-bg-border/50">
-                <td className="py-2 px-3 font-bold text-primary text-sm sticky right-0 bg-bg-deep z-10 border-l-2 border-primary/30">
+                <td className="py-2 px-3 font-bold text-text text-xs sticky right-0 bg-bg-deep z-10">
                   {role.name}
                 </td>
                 {periods.map((p) => {
@@ -497,6 +626,15 @@ export default function RotationTab() {
         />
       )}
 
+      {editRangePeriod && (
+        <EditPeriodRangeModal
+          config={config}
+          period={editRangePeriod}
+          onClose={() => setEditRangePeriod(null)}
+          onSaved={() => { setEditRangePeriod(null); load(); }}
+        />
+      )}
+
       {/* Settings modal (role management + start date) */}
       {showSettings && (
         <EditRotationModal
@@ -515,3 +653,4 @@ export default function RotationTab() {
     </div>
   );
 }
+

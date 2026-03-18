@@ -93,3 +93,44 @@ cd frontend && npm install && npm run dev
 - 🔄 ניהול היעדרויות
 - 📅 לוח סבב שבועי
 - 🌐 ממשק עברית RTL, מותאם מובייל
+
+## Local Run (Windows / PowerShell)
+
+Use two terminals: one for backend, one for frontend.
+
+### 1) Backend
+
+```powershell
+cd "c:\Users\repo\guard shift\mangAPP"
+pip install -r requirements.txt
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Backend URL:
+
+- `http://127.0.0.1:8000`
+- Health check: `http://127.0.0.1:8000/api/health`
+
+Important:
+
+- Keep this terminal open while working locally.
+
+### 2) Frontend
+
+```powershell
+cd "c:\Users\repo\guard shift\mangAPP\frontend"
+npm install
+$env:VITE_API_URL="http://127.0.0.1:8000"
+npm run dev
+```
+
+Frontend URL (usually):
+
+- `http://127.0.0.1:5173`
+
+### 3) Optional production build test
+
+```powershell
+cd "c:\Users\repo\guard shift\mangAPP\frontend"
+npm run build
+```

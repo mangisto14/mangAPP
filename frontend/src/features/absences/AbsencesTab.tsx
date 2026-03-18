@@ -356,7 +356,7 @@ export default function AbsencesTab() {
   // Compute names in today's active rotation slot
   const rotationNamesNow = (() => {
     if (!rotationConfig) return new Set<string>();
-    const periods = computePeriods(rotationConfig.start_date, 9);
+    const periods = computePeriods(rotationConfig, 9);
     const active = periods.find((p) => p.isActive);
     if (!active) return new Set<string>();
     const names: string[] = [];

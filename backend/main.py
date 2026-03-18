@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from contextlib import contextmanager
 import os, urllib.parse, csv, io, logging, traceback
 
@@ -169,6 +169,14 @@ def init_db() -> None:
                 role_id  INTEGER NOT NULL REFERENCES rotation_roles(id) ON DELETE CASCADE,
                 slot_num INTEGER NOT NULL,
                 names    TEXT NOT NULL DEFAULT '[]'
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS rotation_period_ranges (
+                {_SERIAL_PK},
+                slot_num   INTEGER NOT NULL UNIQUE,
+                start_date TEXT NOT NULL,
+                end_date   TEXT NOT NULL
             )
         """)
         # Safe migrations for existing DBs
@@ -787,6 +795,11 @@ class RotationConfigUpdateBody(BaseModel):
     period_days: int = 2
 
 
+class RotationPeriodUpdateBody(BaseModel):
+    start_date: str
+    end_date: str
+
+
 class RotationRoleCreateBody(BaseModel):
     name: str
 
@@ -1329,6 +1342,49 @@ def seed_absences(body: SeedAbsencesBody):
 
 
 # ── Rotation ──────────────────────────────────────────────────────────────────
+def _default_rotation_period_ranges(start_date: str, count: int) -> List[dict]:
+    try:
+        origin = date.fromisoformat(start_date)
+    except Exception:
+        origin = date.today()
+
+    # First Sunday on/after origin
+    days_to_sunday = 0 if origin.weekday() == 6 else (6 - origin.weekday())
+    anchor = origin + timedelta(days=days_to_sunday)
+    today = date.today()
+    days_since_anchor = (today - anchor).days
+    cycle_number = max(0, days_since_anchor // 21)
+    cycle_start = anchor + timedelta(days=cycle_number * 21)
+
+    # א-ג, ג-ה, ו-א
+    period_offsets = [0, 2, 5]
+    rows: List[dict] = []
+    for i in range(count):
+        week = i // 3
+        period_idx = i % 3
+        start_d = cycle_start + timedelta(days=week * 7 + period_offsets[period_idx])
+        end_d = start_d + timedelta(days=2)
+        rows.append({
+            "slot_num": i,
+            "start_date": start_d.isoformat(),
+            "end_date": end_d.isoformat(),
+        })
+    return rows
+
+
+def _ensure_rotation_period_ranges(conn, start_date: str, max_slots: int) -> None:
+    existing = conn.execute("SELECT slot_num FROM rotation_period_ranges").fetchall()
+    existing_slots = {int(r["slot_num"]) for r in existing}
+    defaults = _default_rotation_period_ranges(start_date, max_slots)
+    for p in defaults:
+        if p["slot_num"] in existing_slots:
+            continue
+        conn.execute(
+            _q("INSERT INTO rotation_period_ranges (slot_num, start_date, end_date) VALUES (?, ?, ?)"),
+            (p["slot_num"], p["start_date"], p["end_date"]),
+        )
+
+
 def _build_rotation_response(conn) -> dict:
     cfg = conn.execute("SELECT start_date, period_days FROM rotation_config WHERE id=1").fetchone()
     roles = conn.execute("SELECT * FROM rotation_roles ORDER BY position").fetchall()
@@ -1340,6 +1396,9 @@ def _build_rotation_response(conn) -> dict:
     all_slot_nums = [sl["slot_num"] for sl in slots_all]
     max_slots = max(all_slot_nums) + 1 if all_slot_nums else 9
     max_slots = max(max_slots, 9)
+    cfg_start = cfg["start_date"] if cfg else "2025-03-08"
+    _ensure_rotation_period_ranges(conn, cfg_start, max_slots)
+
     roles_out = []
     for r in roles:
         s = slots_map.get(r["id"], {})
@@ -1349,9 +1408,25 @@ def _build_rotation_response(conn) -> dict:
             "position": r["position"],
             "slots": [s.get(i, []) for i in range(max_slots)],
         })
+
+    period_rows = conn.execute(
+        "SELECT slot_num, start_date, end_date FROM rotation_period_ranges ORDER BY slot_num"
+    ).fetchall()
+    period_map = {int(p["slot_num"]): p for p in period_rows}
+    default_periods = _default_rotation_period_ranges(cfg_start, max_slots)
+    periods_out = []
+    for i in range(max_slots):
+        row = period_map.get(i) or default_periods[i]
+        periods_out.append({
+            "slot_num": i,
+            "start_date": row["start_date"],
+            "end_date": row["end_date"],
+        })
+
     return {
-        "start_date": cfg["start_date"] if cfg else "2025-03-08",
+        "start_date": cfg_start,
         "period_days": cfg["period_days"] if cfg else 2,
+        "periods": periods_out,
         "roles": roles_out,
     }
 
@@ -1375,6 +1450,46 @@ def update_rotation_config(body: RotationConfigUpdateBody):
                 "INSERT OR REPLACE INTO rotation_config (id, start_date, period_days) VALUES (1, ?, ?)",
                 (body.start_date, body.period_days),
             )
+    return {"ok": True}
+
+
+@app.put("/api/rotation/periods/{slot_num}")
+def update_rotation_period(slot_num: int, body: RotationPeriodUpdateBody):
+    if slot_num < 0:
+        raise HTTPException(400, "slot_num must be >= 0")
+    try:
+        start_d = date.fromisoformat(body.start_date)
+        end_d = date.fromisoformat(body.end_date)
+    except Exception:
+        raise HTTPException(400, "Dates must be in YYYY-MM-DD format")
+    if end_d <= start_d:
+        raise HTTPException(400, "end_date must be after start_date")
+
+    with get_conn() as conn:
+        overlaps = conn.execute(
+            _q(
+                "SELECT slot_num, start_date, end_date FROM rotation_period_ranges "
+                "WHERE slot_num <> ?"
+            ),
+            (slot_num,),
+        ).fetchall()
+        for row in overlaps:
+            other_start = date.fromisoformat(row["start_date"])
+            other_end = date.fromisoformat(row["end_date"])
+            # Half-open interval overlap: [start, end)
+            if start_d < other_end and end_d > other_start:
+                raise HTTPException(
+                    400,
+                    f"Date range overlaps with slot {row['slot_num']} ({row['start_date']}..{row['end_date']})",
+                )
+
+        conn.execute(
+            _q(
+                "INSERT INTO rotation_period_ranges (slot_num, start_date, end_date) VALUES (?, ?, ?) "
+                "ON CONFLICT (slot_num) DO UPDATE SET start_date=EXCLUDED.start_date, end_date=EXCLUDED.end_date"
+            ),
+            (slot_num, body.start_date, body.end_date),
+        )
     return {"ok": True}
 
 
