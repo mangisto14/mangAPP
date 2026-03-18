@@ -6,6 +6,9 @@ import {
 } from "./api";
 import type { AbsenceStatus, AbsenceHistory, Settings, AlertThreshold } from "./types";
 import type { AlertLevel } from "./Clock";
+import { getRotation } from "../rotation/api";
+import type { RotationConfig } from "../rotation/types";
+import { computePeriods } from "../rotation/utils";
 
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
@@ -242,6 +245,7 @@ function CopyNamesButton({ names }: { names: string[] }) {
 
 export default function AbsencesTab() {
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
+  const [rotationConfig, setRotationConfig] = useState<RotationConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -260,9 +264,10 @@ export default function AbsencesTab() {
 
   const load = useCallback(async () => {
     try {
-      const [data, cfg] = await Promise.all([getAbsences(), getSettings()]);
+      const [data, cfg, rot] = await Promise.all([getAbsences(), getSettings(), getRotation().catch(() => null)]);
       setAbsences(data);
       setSettings(cfg);
+      setRotationConfig(rot);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -333,6 +338,20 @@ export default function AbsencesTab() {
     }
   }
 
+  // Compute names in today's active rotation slot
+  const rotationNamesNow = (() => {
+    if (!rotationConfig) return new Set<string>();
+    const periods = computePeriods(rotationConfig.start_date, 9);
+    const active = periods.find((p) => p.isActive);
+    if (!active) return new Set<string>();
+    const names: string[] = [];
+    for (const role of rotationConfig.roles) {
+      const slotIdx = active.slotIndex % role.slots.length;
+      names.push(...(role.slots[slotIdx] ?? []));
+    }
+    return new Set(names);
+  })();
+
   const tempOut = absences.filter(
     (a) => a.is_out && (!a.reason || !ABSENT_REASONS.includes(a.reason))
   );
@@ -351,6 +370,8 @@ export default function AbsencesTab() {
   const filteredInside = search
     ? inside.filter((a) => a.name.includes(search))
     : inside;
+  const insideInRotation = filteredInside.filter((a) => rotationNamesNow.has(a.name));
+  const insideNotInRotation = filteredInside.filter((a) => !rotationNamesNow.has(a.name));
 
   const alertOut = out.filter((a) => a.left_at && getAlertLevel(a.left_at, settings.alert_thresholds) !== null);
 
@@ -523,40 +544,93 @@ export default function AbsencesTab() {
                 {search ? "לא נמצאו תוצאות" : "אין שומרים במסגרת"}
               </p>
             ) : (
-              <ul className="space-y-2 max-h-96 overflow-y-auto">
-                {filteredInside.map((a) => {
-                  const checked = selectedIds.has(a.guard_id);
-                  return (
-                    <li
-                      key={a.guard_id}
-                      className={`flex items-center gap-2 bg-bg-base rounded-xl px-3 py-2
-                        ${checked ? "ring-2 ring-primary/50" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSelect(a.guard_id)}
-                        className="w-4 h-4 accent-primary shrink-0"
-                      />
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="font-medium text-text">{a.name}</span>
-                        {a.total_exits > 0 && (
-                          <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
-                            {a.total_exits} יציאות
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        className="btn-danger text-xs px-3 py-1.5 shrink-0"
-                        disabled={busy === a.guard_id}
-                        onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
-                      >
-                        יצא 🚪
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {insideInRotation.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-primary mb-2 flex items-center gap-1">
+                      <span>🔄</span> בסבב עכשיו
+                      <span className="bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                        {insideInRotation.length}
+                      </span>
+                    </p>
+                    <ul className="space-y-2">
+                      {insideInRotation.map((a) => {
+                        const checked = selectedIds.has(a.guard_id);
+                        return (
+                          <li
+                            key={a.guard_id}
+                            className={`flex items-center gap-2 bg-primary/8 border border-primary/20 rounded-xl px-3 py-2
+                              ${checked ? "ring-2 ring-primary/50" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSelect(a.guard_id)}
+                              className="w-4 h-4 accent-primary shrink-0"
+                            />
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="font-medium text-text">{a.name}</span>
+                              {a.total_exits > 0 && (
+                                <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
+                                  {a.total_exits} יציאות
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="btn-danger text-xs px-3 py-1.5 shrink-0"
+                              disabled={busy === a.guard_id}
+                              onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                            >
+                              יצא 🚪
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {insideNotInRotation.length > 0 && (
+                  <div>
+                    {insideInRotation.length > 0 && (
+                      <p className="text-xs font-semibold text-text-muted mb-2">שאר הכוח</p>
+                    )}
+                    <ul className="space-y-2">
+                      {insideNotInRotation.map((a) => {
+                        const checked = selectedIds.has(a.guard_id);
+                        return (
+                          <li
+                            key={a.guard_id}
+                            className={`flex items-center gap-2 bg-bg-base rounded-xl px-3 py-2
+                              ${checked ? "ring-2 ring-primary/50" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSelect(a.guard_id)}
+                              className="w-4 h-4 accent-primary shrink-0"
+                            />
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="font-medium text-text">{a.name}</span>
+                              {a.total_exits > 0 && (
+                                <span className="text-xs bg-bg-border text-text-muted px-1.5 py-0.5 rounded-full">
+                                  {a.total_exits} יציאות
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="btn-danger text-xs px-3 py-1.5 shrink-0"
+                              disabled={busy === a.guard_id}
+                              onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                            >
+                              יצא 🚪
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </>
