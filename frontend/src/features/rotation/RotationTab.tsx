@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Pencil, Settings, PlusCircle, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown } from "lucide-react";
 import { getRotation, updateRotationSlots, syncRotationGuards, syncScheduleGuards } from "./api";
 import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
@@ -197,6 +197,8 @@ export default function RotationTab() {
   const [guardNames, setGuardNames] = useState<string[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
+  const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const activePeriodRef = useRef<HTMLTableCellElement>(null);
 
   const load = async () => {
     setLoading(true);
@@ -240,6 +242,13 @@ export default function RotationTab() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Scroll to active period after data loads
+  useEffect(() => {
+    if (!loading && activePeriodRef.current) {
+      activePeriodRef.current.scrollIntoView({ inline: "center", behavior: "smooth", block: "nearest" });
+    }
+  }, [loading]);
 
   if (loading) return <div className="fade-in text-center text-text-dim py-20">טוען...</div>;
   if (error || !config) return <div className="fade-in card border-danger/30 text-danger">{error || "שגיאה"}</div>;
@@ -291,28 +300,44 @@ export default function RotationTab() {
             <PlusCircle size={14} />
             הוסף שבוע
           </button>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
-                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
-                       hover:border-primary/40 transition-all disabled:opacity-50"
-            title="סנכרן תפקידים בין סבב לכוח אדם"
-          >
-            <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
-            סנכרן סבב
-          </button>
-          <button
-            onClick={handleSyncSchedule}
-            disabled={syncingSchedule}
-            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
-                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
-                       hover:border-primary/40 transition-all disabled:opacity-50"
-            title="סנכרן תפקידים מלוח לכוח אדם"
-          >
-            <RefreshCw size={14} className={syncingSchedule ? "animate-spin" : ""} />
-            סנכרן לוח
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowSyncMenu((v) => !v)}
+              disabled={syncing || syncingSchedule}
+              className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
+                         rounded-xl text-sm font-semibold text-text-dim hover:text-text
+                         hover:border-primary/40 transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={(syncing || syncingSchedule) ? "animate-spin" : ""} />
+              סנכרן
+              <ChevronDown size={12} className={`transition-transform ${showSyncMenu ? "rotate-180" : ""}`} />
+            </button>
+            {showSyncMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowSyncMenu(false)} />
+                <div className="absolute left-0 top-full mt-1 bg-bg-card border border-bg-border
+                                rounded-xl shadow-lg z-20 min-w-[120px] overflow-hidden">
+                  <button
+                    onClick={() => { setShowSyncMenu(false); handleSync(); }}
+                    disabled={syncing}
+                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                               hover:bg-bg-base/60 transition-colors disabled:opacity-50"
+                  >
+                    סנכרן סבב
+                  </button>
+                  <div className="border-t border-bg-border/50" />
+                  <button
+                    onClick={() => { setShowSyncMenu(false); handleSyncSchedule(); }}
+                    disabled={syncingSchedule}
+                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                               hover:bg-bg-base/60 transition-colors disabled:opacity-50"
+                  >
+                    סנכרן לוח
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
@@ -378,6 +403,7 @@ export default function RotationTab() {
               {periods.map((p) => (
                 <th
                   key={p.slotIndex}
+                  ref={p.isActive ? activePeriodRef : undefined}
                   className={`text-center py-2 px-1 text-xs font-semibold whitespace-nowrap
                     ${p.isActive
                       ? "text-primary bg-primary/10 rounded-t-lg border-t border-x border-primary/25"
@@ -405,7 +431,7 @@ export default function RotationTab() {
           <tbody>
             {config.roles.map((role) => (
               <tr key={role.id} className="border-t border-bg-border/50">
-                <td className="py-2 px-3 font-bold text-text text-xs sticky right-0 bg-bg-deep z-10">
+                <td className="py-2 px-3 font-bold text-primary text-sm sticky right-0 bg-bg-deep z-10 border-l-2 border-primary/30">
                   {role.name}
                 </td>
                 {periods.map((p) => {
