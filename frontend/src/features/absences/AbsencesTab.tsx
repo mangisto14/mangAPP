@@ -254,6 +254,7 @@ export default function AbsencesTab() {
   const [search, setSearch] = useState("");
   const [pendingLeave, setPendingLeave] = useState<{ id: number; name: string } | null>(null);
   const [pendingBulkLeave, setPendingBulkLeave] = useState(false);
+  const [pendingRotationLeave, setPendingRotationLeave] = useState(false);
   const [settings, setSettings] = useState<Settings>({ alert_minutes: null, alert_thresholds: [] });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [outFilter, setOutFilter] = useState<"all" | "temp" | "absent">("all");
@@ -314,6 +315,20 @@ export default function AbsencesTab() {
     try {
       await Promise.all(ids.map((id) => markReturn(id)));
       clearSelection();
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function doRotationLeave(ids: number[], reason: string | undefined) {
+    if (!ids.length) return;
+    setBulkBusy(true);
+    setError("");
+    try {
+      await Promise.all(ids.map((id) => markLeave(id, reason)));
       await load();
     } catch (e: any) {
       setError(e.message);
@@ -547,12 +562,21 @@ export default function AbsencesTab() {
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {insideInRotation.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-primary mb-2 flex items-center gap-1">
-                      <span>🔄</span> בסבב עכשיו
-                      <span className="bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
-                        {insideInRotation.length}
-                      </span>
-                    </p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-primary flex items-center gap-1">
+                        <span>🔄</span> בסבב עכשיו
+                        <span className="bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                          {insideInRotation.length}
+                        </span>
+                      </p>
+                      <button
+                        className="btn-danger text-xs px-2 py-1"
+                        disabled={bulkBusy}
+                        onClick={() => setPendingRotationLeave(true)}
+                      >
+                        כולם יצאו 🚪
+                      </button>
+                    </div>
                     <ul className="space-y-2">
                       {insideInRotation.map((a) => {
                         const checked = selectedIds.has(a.guard_id);
@@ -697,6 +721,19 @@ export default function AbsencesTab() {
             doBulkLeave(reason);
           }}
           onCancel={() => setPendingBulkLeave(false)}
+        />
+      )}
+
+      {/* Rotation Bulk Leave Sheet */}
+      {pendingRotationLeave && (
+        <ReasonSheet
+          name={`${insideInRotation.length} אנשים בסבב`}
+          onSelect={(reason) => {
+            const ids = insideInRotation.map((a) => a.guard_id);
+            setPendingRotationLeave(false);
+            doRotationLeave(ids, reason);
+          }}
+          onCancel={() => setPendingRotationLeave(false)}
         />
       )}
     </div>
