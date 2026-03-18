@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown } from "lucide-react";
+import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
 import AddShiftTab from "./AddShiftTab";
@@ -55,6 +55,7 @@ export default function ShiftsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
 
   /** Derive the backend filter + date range from UI state */
   function getApiParams(): {
@@ -92,6 +93,11 @@ export default function ShiftsTab() {
   useEffect(() => {
     load();
   }, [filter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    const entries = Object.keys(grouped);
+    setCollapsedDates(new Set(entries.slice(1)));
+  }, [filter, dateFrom, dateTo, shifts.length]);
 
   const handleDelete = async (id: number) => {
     if (!confirm("למחוק משמרת זו?")) return;
@@ -133,6 +139,15 @@ export default function ShiftsTab() {
     setDateFrom("");
     setDateTo("");
     setFilter("all");
+  };
+
+  const toggleDate = (date: string) => {
+    setCollapsedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
   };
 
   // Group by date
@@ -274,21 +289,25 @@ export default function ShiftsTab() {
       {!loading &&
         Object.entries(grouped).map(([date, dayShifts]) => {
           const { dayHe } = formatDate(dayShifts[0].start_time);
+          const isCollapsed = collapsedDates.has(date);
           return (
             <div key={date} className="space-y-2 slide-in">
               {/* Date header */}
               <div className="flex items-center gap-2 px-1">
-                <div
-                  className="text-xs font-bold text-primary-light bg-primary/10 px-3 py-1
-                                rounded-full border border-primary/20"
+                <button
+                  onClick={() => toggleDate(date)}
+                  className="inline-flex items-center gap-2 text-xs font-bold text-primary-light bg-primary/10 px-3 py-1
+                             rounded-full border border-primary/20 hover:bg-primary/15 transition-all"
                 >
-                  יום {dayHe} · {date}
-                </div>
+                  <span>יום {dayHe} · {date}</span>
+                  <span className="text-primary/70">({dayShifts.length})</span>
+                  {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                </button>
                 <div className="flex-1 h-px bg-bg-border" />
               </div>
 
               {/* Shift rows */}
-              {dayShifts.map((s) => (
+              {!isCollapsed && dayShifts.map((s) => (
                 <div
                   key={s.id}
                   className={`card flex items-center justify-between gap-3 transition-all hover:border-bg-border/60
