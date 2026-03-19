@@ -8,6 +8,7 @@ import RotationTab from "./features/rotation/RotationTab";
 import { getSettings, updateSettings } from "./features/absences/api";
 import type { AlertThreshold } from "./features/absences/types";
 import { useTheme } from "./hooks/useTheme";
+import { useFontSize } from "./hooks/useFontSize";
 import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
 
 const TABS = [
@@ -126,6 +127,7 @@ export default function App() {
   const [pinReady, setPinReady] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
+  const { increase, decrease, canIncrease, canDecrease } = useFontSize();
 
   // PWA install prompt
   const deferredPrompt = useRef<any>(null);
@@ -258,6 +260,26 @@ export default function App() {
           })}
         </div>
       </nav>
+
+      {/* Font size FAB */}
+      <div className="fixed bottom-20 left-3 z-40 flex flex-col gap-1">
+        <button
+          onClick={increase}
+          disabled={!canIncrease}
+          aria-label="הגדל גופן"
+          className="w-9 h-9 rounded-full bg-bg-card border border-bg-border shadow-lg flex items-center justify-center text-text-muted hover:text-text hover:border-primary/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <span className="text-sm font-bold leading-none">A+</span>
+        </button>
+        <button
+          onClick={decrease}
+          disabled={!canDecrease}
+          aria-label="הקטן גופן"
+          className="w-9 h-9 rounded-full bg-bg-card border border-bg-border shadow-lg flex items-center justify-center text-text-muted hover:text-text hover:border-primary/50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <span className="text-xs font-bold leading-none">A−</span>
+        </button>
+      </div>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
