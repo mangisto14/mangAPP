@@ -293,9 +293,23 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
   ws["!merges"] = merges;
   ws["!cols"] = [{ wch: 16 }, ...periods.map(() => ({ wch: 20 }))];
 
+  const filename = `סבב_חופשה_${new Date().toISOString().slice(0, 10)}.xlsx`;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "סבב חופשה");
-  XLSX.writeFile(wb, `סבב_חופשה_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+  // Try native share (mobile) → fallback to download (desktop)
+  const buf: ArrayBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const file = new File([buf], filename, {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  if (navigator.canShare?.({ files: [file] })) {
+    navigator.share({ files: [file], title: "סבב חופשה" }).catch(() => {
+      XLSX.writeFile(wb, filename);
+    });
+  } else {
+    XLSX.writeFile(wb, filename);
+  }
 }
 
 // ── SyncModal ──────────────────────────────────────────────────────────────────
