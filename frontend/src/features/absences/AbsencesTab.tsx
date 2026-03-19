@@ -98,20 +98,17 @@ function ReasonSheet({
   );
 }
 
-// ── Floating Label Date Input ─────────────────────────────────────────────────
+// ── Label + Date Input ────────────────────────────────────────────────────────
 function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="relative flex-1">
+    <div className="flex flex-col gap-1 flex-1">
+      <label className="text-xs font-medium text-text-muted px-1">{label}</label>
       <input
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="input text-sm w-full pt-5 pb-1"
+        className="input text-sm w-full"
       />
-      <span className={`absolute right-3 pointer-events-none transition-all duration-150 text-text-muted
-        ${value ? "top-1 text-[10px]" : "top-1/2 -translate-y-1/2 text-sm"}`}>
-        {label}
-      </span>
     </div>
   );
 }
