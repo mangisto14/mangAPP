@@ -233,6 +233,9 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
   const ws: Record<string, any> = {};
   const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
 
+  const thin = { style: "thin", color: { rgb: "CBD5E1" } };
+  const border = { top: thin, bottom: thin, left: thin, right: thin };
+
   const setCell = (r: number, c: number, v: string, s?: object) => {
     ws[XLSX.utils.encode_cell({ c, r })] = { v, t: "s", ...(s ? { s } : {}) };
   };
@@ -241,7 +244,7 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
     font: { bold: true, sz: 11 },
     fill: { patternType: "solid", fgColor: { rgb: bgColor } },
     alignment: { horizontal: "center", vertical: "center" },
-    border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } },
+    border,
   });
 
   // Header row
@@ -249,6 +252,7 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
     font: { bold: true, sz: 11 },
     fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
     alignment: { horizontal: "right", vertical: "center" },
+    border,
   });
   periods.forEach((p, ci) => {
     setCell(0, ci + 1, `${p.label} ${p.periodLabel}`, headerStyle(PERIOD_EXCEL_COLORS[p.periodIndex].header));
@@ -263,6 +267,7 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
       font: { bold: true, sz: 10 },
       fill: { patternType: "solid", fgColor: { rgb: "F1F5F9" } },
       alignment: { horizontal: "right", vertical: "center" },
+      border,
     });
     if (maxGuards > 1) {
       merges.push({ s: { r: row, c: 0 }, e: { r: row + maxGuards - 1, c: 0 } });
@@ -275,6 +280,7 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
         setCell(row + i, ci + 1, names[i] ?? "", {
           fill: { patternType: "solid", fgColor: { rgb: cellColor } },
           alignment: { horizontal: "center", vertical: "center" },
+          border,
         });
       }
     });
