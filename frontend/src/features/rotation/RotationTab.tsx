@@ -227,64 +227,64 @@ const PERIOD_EXCEL_COLORS = [
   { header: "BBF7D0", cell: "F0FDF4" }, // green (ו-א)
 ];
 
-function cellAddr(col: number, row: number) {
-  return XLSX.utils.encode_cell({ c: col, r: row });
-}
 
 function exportToExcel(config: RotationConfig, periods: Period[]) {
-  const header = ["תפקיד", ...periods.map((p) => `${p.label} ${p.periodLabel}`)];
-  const rows = config.roles.map((role) => [
-    role.name,
-    ...periods.map((p) => (role.slots[p.slotIndex] ?? []).join(", ")),
-  ]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ws: Record<string, any> = {};
+  const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
 
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  ws["!cols"] = [{ wch: 16 }, ...periods.map(() => ({ wch: 22 }))];
+  const setCell = (r: number, c: number, v: string, s?: object) => {
+    ws[XLSX.utils.encode_cell({ c, r })] = { v, t: "s", ...(s ? { s } : {}) };
+  };
 
-  // Style header row
   const headerStyle = (bgColor: string) => ({
     font: { bold: true, sz: 11 },
     fill: { patternType: "solid", fgColor: { rgb: bgColor } },
     alignment: { horizontal: "center", vertical: "center" },
-    border: {
-      bottom: { style: "thin", color: { rgb: "94A3B8" } },
-    },
+    border: { bottom: { style: "thin", color: { rgb: "94A3B8" } } },
   });
 
-  // Role column header
-  ws[cellAddr(0, 0)].s = {
+  // Header row
+  setCell(0, 0, "תפקיד", {
     font: { bold: true, sz: 11 },
     fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
     alignment: { horizontal: "right", vertical: "center" },
-  };
-
-  // Period headers + data cells
+  });
   periods.forEach((p, ci) => {
-    const colors = PERIOD_EXCEL_COLORS[p.periodIndex];
-    ws[cellAddr(ci + 1, 0)].s = headerStyle(colors.header);
+    setCell(0, ci + 1, `${p.label} ${p.periodLabel}`, headerStyle(PERIOD_EXCEL_COLORS[p.periodIndex].header));
+  });
 
-    rows.forEach((_, ri) => {
-      const addr = cellAddr(ci + 1, ri + 1);
-      if (ws[addr]) {
-        ws[addr].s = {
-          fill: { patternType: "solid", fgColor: { rgb: colors.cell } },
-          alignment: { horizontal: "center", vertical: "top", wrapText: true },
-        };
+  // Data rows — one row per guard, role cell merged vertically
+  let row = 1;
+  for (const role of config.roles) {
+    const maxGuards = Math.max(1, ...periods.map((p) => (role.slots[p.slotIndex] ?? []).length));
+
+    setCell(row, 0, role.name, {
+      font: { bold: true, sz: 10 },
+      fill: { patternType: "solid", fgColor: { rgb: "F1F5F9" } },
+      alignment: { horizontal: "right", vertical: "center" },
+    });
+    if (maxGuards > 1) {
+      merges.push({ s: { r: row, c: 0 }, e: { r: row + maxGuards - 1, c: 0 } });
+    }
+
+    periods.forEach((p, ci) => {
+      const names = role.slots[p.slotIndex] ?? [];
+      const { cell: cellColor } = PERIOD_EXCEL_COLORS[p.periodIndex];
+      for (let i = 0; i < maxGuards; i++) {
+        setCell(row + i, ci + 1, names[i] ?? "", {
+          fill: { patternType: "solid", fgColor: { rgb: cellColor } },
+          alignment: { horizontal: "center", vertical: "center" },
+        });
       }
     });
-  });
 
-  // Role name cells
-  rows.forEach((_, ri) => {
-    const addr = cellAddr(0, ri + 1);
-    if (ws[addr]) {
-      ws[addr].s = {
-        font: { bold: true, sz: 10 },
-        fill: { patternType: "solid", fgColor: { rgb: "F1F5F9" } },
-        alignment: { horizontal: "right", vertical: "center" },
-      };
-    }
-  });
+    row += maxGuards;
+  }
+
+  ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: row - 1, c: periods.length } });
+  ws["!merges"] = merges;
+  ws["!cols"] = [{ wch: 16 }, ...periods.map(() => ({ wch: 20 }))];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "סבב חופשה");
