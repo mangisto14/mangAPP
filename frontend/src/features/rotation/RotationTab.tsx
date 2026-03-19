@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown } from "lucide-react";
+import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import {
   getRotation,
@@ -408,7 +408,7 @@ export default function RotationTab() {
   const [guards, setGuards] = useState<Guard[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
   const [editRangePeriod, setEditRangePeriod] = useState<Period | null>(null);
-  const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const activePeriodRef = useRef<HTMLTableCellElement>(null);
 
   const load = async () => {
@@ -492,71 +492,71 @@ export default function RotationTab() {
           </div>
         ) : <div />}
         <div className="flex items-center gap-2">
-          {extraWeeks > 0 && (
-            <button
-              onClick={() => setExtraWeeks((n) => n - 1)}
-              className="text-xs text-text-dim bg-bg-card border border-bg-border px-3 py-1.5
-                         rounded-xl font-semibold hover:text-text hover:border-primary/40 transition-all"
-            >
-              הסר שבוע
-            </button>
-          )}
-          <button
-            onClick={() => setExtraWeeks((n) => n + 1)}
-            className="flex items-center gap-1.5 text-xs text-success bg-success/10 border border-success/25
-                       px-3 py-1.5 rounded-xl font-semibold hover:bg-success/20 transition-all"
-          >
-            <PlusCircle size={14} />
-            הוסף שבוע
-          </button>
           <div className="relative">
             <button
-              onClick={() => setShowSyncMenu((v) => !v)}
+              onClick={() => setShowActionsMenu((v) => !v)}
               disabled={syncing || syncingSchedule}
               className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
                          rounded-xl text-sm font-semibold text-text-dim hover:text-text
                          hover:border-primary/40 transition-all disabled:opacity-50"
             >
-              <RefreshCw size={14} className={(syncing || syncingSchedule) ? "animate-spin" : ""} />
-              סנכרן
-              <ChevronDown size={12} className={`transition-transform ${showSyncMenu ? "rotate-180" : ""}`} />
+              פעולות
+              <ChevronDown size={12} className={`transition-transform ${showActionsMenu ? "rotate-180" : ""}`} />
             </button>
-            {showSyncMenu && (
+            {showActionsMenu && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowSyncMenu(false)} />
+                <div className="fixed inset-0 z-10" onClick={() => setShowActionsMenu(false)} />
                 <div className="absolute left-0 top-full mt-1 bg-bg-card border border-bg-border
-                                rounded-xl shadow-lg z-20 min-w-[120px] overflow-hidden">
+                                rounded-xl shadow-lg z-20 min-w-[140px] overflow-hidden">
                   <button
-                    onClick={() => { setShowSyncMenu(false); handleSync(); }}
-                    disabled={syncing}
+                    onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n + 1); }}
                     className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                               hover:bg-bg-base/60 transition-colors disabled:opacity-50"
+                               hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
                   >
-                    סנכרן סבב
+                    הוסף שבוע
+                    <PlusCircle size={13} />
+                  </button>
+                  <button
+                    onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n - 1); }}
+                    disabled={extraWeeks === 0}
+                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                               hover:bg-bg-base/60 transition-colors disabled:opacity-40 flex items-center gap-2 justify-end"
+                  >
+                    הסר שבוע
+                    <MinusCircle size={13} />
                   </button>
                   <div className="border-t border-bg-border/50" />
                   <button
-                    onClick={() => { setShowSyncMenu(false); handleSyncSchedule(); }}
+                    onClick={() => { setShowActionsMenu(false); handleSync(); }}
+                    disabled={syncing}
+                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                               hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
+                  >
+                    סנכרן סבב
+                    <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
+                  </button>
+                  <button
+                    onClick={() => { setShowActionsMenu(false); handleSyncSchedule(); }}
                     disabled={syncingSchedule}
                     className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                               hover:bg-bg-base/60 transition-colors disabled:opacity-50"
+                               hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
                   >
                     סנכרן לוח
+                    <CalendarDays size={13} />
+                  </button>
+                  <div className="border-t border-bg-border/50" />
+                  <button
+                    onClick={() => { setShowActionsMenu(false); exportToExcel(config, periods); }}
+                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                               hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
+                  >
+                    ייצוא
+                    <FileDown size={13} />
                   </button>
                 </div>
               </>
             )}
           </div>
-          <button
-            onClick={() => exportToExcel(config, periods)}
-            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
-                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
-                       hover:border-success/40 transition-all"
-            title="ייצוא לאקסל"
-          >
-            <FileDown size={14} />
-            ייצוא
-          </button>
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
