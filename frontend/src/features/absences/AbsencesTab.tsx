@@ -101,13 +101,13 @@ function ReasonSheet({
 // ── Label + Date Input ────────────────────────────────────────────────────────
 function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex flex-col gap-1 flex-1">
+    <div className="flex flex-col gap-1 min-w-0">
       <label className="text-xs font-medium text-text-muted px-1">{label}</label>
       <input
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="input text-sm w-full"
+        className="input text-sm w-full min-w-0"
       />
     </div>
   );
@@ -166,7 +166,7 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
             📥 CSV
           </a>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 min-w-0">
           <DateInput label="מתאריך" value={dateFrom} onChange={setDateFrom} />
           <DateInput label="עד תאריך" value={dateTo} onChange={setDateTo} />
         </div>
