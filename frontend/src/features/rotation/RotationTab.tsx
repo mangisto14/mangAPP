@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown } from "lucide-react";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import {
   getRotation,
   updateRotationSlots,
@@ -220,6 +220,17 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
 
 // ── exportToExcel ─────────────────────────────────────────────────────────────
 
+// Excel fill colors per period type (א-ג / ג-ה / ו-א)
+const PERIOD_EXCEL_COLORS = [
+  { header: "BFDBFE", cell: "EFF6FF" }, // blue  (א-ג)
+  { header: "FDE68A", cell: "FFFBEB" }, // amber (ג-ה)
+  { header: "BBF7D0", cell: "F0FDF4" }, // green (ו-א)
+];
+
+function cellAddr(col: number, row: number) {
+  return XLSX.utils.encode_cell({ c: col, r: row });
+}
+
 function exportToExcel(config: RotationConfig, periods: Period[]) {
   const header = ["תפקיד", ...periods.map((p) => `${p.label} ${p.periodLabel}`)];
   const rows = config.roles.map((role) => [
@@ -228,8 +239,52 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  ws["!cols"] = [{ wch: 14 }, ...periods.map(() => ({ wch: 20 }))];
-  ws["!dir"] = "rtl" as never;
+  ws["!cols"] = [{ wch: 16 }, ...periods.map(() => ({ wch: 22 }))];
+
+  // Style header row
+  const headerStyle = (bgColor: string) => ({
+    font: { bold: true, sz: 11 },
+    fill: { patternType: "solid", fgColor: { rgb: bgColor } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: {
+      bottom: { style: "thin", color: { rgb: "94A3B8" } },
+    },
+  });
+
+  // Role column header
+  ws[cellAddr(0, 0)].s = {
+    font: { bold: true, sz: 11 },
+    fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } },
+    alignment: { horizontal: "right", vertical: "center" },
+  };
+
+  // Period headers + data cells
+  periods.forEach((p, ci) => {
+    const colors = PERIOD_EXCEL_COLORS[p.periodIndex];
+    ws[cellAddr(ci + 1, 0)].s = headerStyle(colors.header);
+
+    rows.forEach((_, ri) => {
+      const addr = cellAddr(ci + 1, ri + 1);
+      if (ws[addr]) {
+        ws[addr].s = {
+          fill: { patternType: "solid", fgColor: { rgb: colors.cell } },
+          alignment: { horizontal: "center", vertical: "top", wrapText: true },
+        };
+      }
+    });
+  });
+
+  // Role name cells
+  rows.forEach((_, ri) => {
+    const addr = cellAddr(0, ri + 1);
+    if (ws[addr]) {
+      ws[addr].s = {
+        font: { bold: true, sz: 10 },
+        fill: { patternType: "solid", fgColor: { rgb: "F1F5F9" } },
+        alignment: { horizontal: "right", vertical: "center" },
+      };
+    }
+  });
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "סבב חופשה");
