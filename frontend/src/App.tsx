@@ -4,18 +4,18 @@ import GuardsTab from "./components/GuardsTab";
 import StatsTab from "./components/StatsTab";
 import PinScreen from "./components/PinScreen";
 import AbsencesTab from "./features/absences/AbsencesTab";
-
 import RotationTab from "./features/rotation/RotationTab";
 import { getSettings, updateSettings } from "./features/absences/api";
 import type { AlertThreshold } from "./features/absences/types";
 import { useTheme } from "./hooks/useTheme";
+import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
 
 const TABS = [
-  { id: "shifts",   icon: "📋", label: "משמרות"    },
-  { id: "absences", icon: "🚪", label: "יציאות"    },
-  { id: "rotation", icon: "🔄", label: "סבב"       },
-  { id: "guards",   icon: "👥", label: "כוח אדם"   },
-  { id: "stats",    icon: "📊", label: "סטטיסטיקה" },
+  { id: "shifts",   Icon: ShiftsIcon,   label: "משמרות"    },
+  { id: "absences", Icon: AbsencesIcon, label: "יציאות"    },
+  { id: "rotation", Icon: RotationIcon, label: "סבב"       },
+  { id: "guards",   Icon: GuardsIcon,   label: "כוח אדם"   },
+  { id: "stats",    Icon: StatsIcon,    label: "סטטיסטיקה" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -248,7 +248,7 @@ export default function App() {
                 className={`relative flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors duration-150
                   ${active ? "text-primary" : "text-text-dim hover:text-text-muted"}`}
               >
-                <span className="text-xl leading-none" aria-hidden="true">{t.icon}</span>
+                <t.Icon className="w-6 h-6" />
                 <span>{t.label}</span>
                 {active && (
                   <span className="absolute bottom-0 w-8 h-0.5 bg-primary rounded-full" aria-hidden="true" />
