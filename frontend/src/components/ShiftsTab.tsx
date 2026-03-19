@@ -3,6 +3,7 @@ import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp } f
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
 import AddShiftTab from "./AddShiftTab";
+import { SkeletonShiftCards } from "./Skeleton";
 
 type Filter = "all" | "future" | "past" | "week" | "range";
 
@@ -274,9 +275,7 @@ export default function ShiftsTab() {
       })()}
 
       {/* Content */}
-      {loading && (
-        <div className="text-center text-text-dim py-10">טוען...</div>
-      )}
+      {loading && <SkeletonShiftCards />}
       {error && (
         <div className="card border-danger/30 text-danger text-sm">{error}</div>
       )}

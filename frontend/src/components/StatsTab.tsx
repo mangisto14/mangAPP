@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { getStats } from "../api";
 import type { Stats } from "../types";
+import { SkeletonStatCards } from "./Skeleton";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 const RANK_BG = [
@@ -22,7 +23,7 @@ export default function StatsTab() {
   }, []);
 
   if (loading) {
-    return <div className="text-center text-text-dim py-10 fade-in">טוען...</div>;
+    return <SkeletonStatCards />;
   }
   if (!stats) {
     return <div className="card text-danger">שגיאה בטעינת נתונים</div>;

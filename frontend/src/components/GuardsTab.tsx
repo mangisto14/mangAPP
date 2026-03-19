@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown } from "lucide-react";
 import { getGuards, addGuards, updateGuard, deleteGuard } from "../api";
 import type { Guard } from "../types";
+import { SkeletonGuardCards } from "./Skeleton";
 
 interface EditState {
   name: string;
@@ -154,7 +155,7 @@ export default function GuardsTab() {
           </div>
         </div>
 
-        {loading && <div className="text-center text-text-dim py-6">טוען...</div>}
+        {loading && <SkeletonGuardCards />}
         {!loading && guards.length === 0 && (
           <div className="text-center text-text-dim py-6">אין אנשים – הוסף למעלה</div>
         )}

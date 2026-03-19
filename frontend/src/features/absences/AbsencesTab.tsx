@@ -9,6 +9,7 @@ import type { AlertLevel } from "./Clock";
 import { getRotation } from "../rotation/api";
 import type { RotationConfig } from "../rotation/types";
 import { computePeriods } from "../rotation/utils";
+import { SkeletonAbsenceCards, SkeletonTableRows } from "../../components/Skeleton";
 
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
@@ -177,7 +178,7 @@ function HistoryView({ absences }: { absences: AbsenceStatus[] }) {
       {/* Table */}
       <div className="card p-0 rounded-xl overflow-hidden">
         {loading ? (
-          <p className="text-center text-text-dim py-6">טוען...</p>
+          <SkeletonTableRows />
         ) : rows.length === 0 ? (
           <p className="text-center text-text-dim py-6">אין רשומות</p>
         ) : (
@@ -395,7 +396,7 @@ export default function AbsencesTab() {
   const selectedInCount  = [...selectedIds].filter((id) => inside.some((a) => a.guard_id === id)).length;
   const hasSelection = selectedIds.size > 0;
 
-  if (loading) return <p className="text-center text-text-dim mt-10">טוען...</p>;
+  if (loading) return <SkeletonAbsenceCards />;
 
   return (
     <div className="space-y-4 fade-in">

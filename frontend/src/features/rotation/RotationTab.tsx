@@ -13,6 +13,7 @@ import { getGuards } from "../../api";
 import type { Guard } from "../../types";
 import type { RotationConfig } from "./types";
 import { computePeriods, PERIOD_CONFIG, PERIOD_COLORS } from "./utils";
+import { SkeletonRotation } from "../../components/Skeleton";
 import type { Period } from "./utils";
 import EditRotationModal from "./EditRotationModal";
 import GuardAutocomplete from "./GuardAutocomplete";
@@ -459,7 +460,7 @@ export default function RotationTab() {
     }
   }, [loading]);
 
-  if (loading) return <div className="fade-in text-center text-text-dim py-20">טוען...</div>;
+  if (loading) return <SkeletonRotation />;
   if (error || !config) return <div className="fade-in card border-danger/30 text-danger">{error || "שגיאה"}</div>;
 
   const numPeriods = 9 + extraWeeks * 3;
