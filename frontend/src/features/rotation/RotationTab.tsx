@@ -1,5 +1,6 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown, CalendarDays } from "lucide-react";
+import { Pencil, Settings, PlusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   getRotation,
   updateRotationSlots,
@@ -215,6 +216,24 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
       </div>
     </div>
   );
+}
+
+// ── exportToExcel ─────────────────────────────────────────────────────────────
+
+function exportToExcel(config: RotationConfig, periods: Period[]) {
+  const header = ["תפקיד", ...periods.map((p) => `${p.label} ${p.periodLabel}`)];
+  const rows = config.roles.map((role) => [
+    role.name,
+    ...periods.map((p) => (role.slots[p.slotIndex] ?? []).join(", ")),
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  ws["!cols"] = [{ wch: 14 }, ...periods.map(() => ({ wch: 20 }))];
+  ws["!dir"] = "rtl" as never;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "סבב חופשה");
+  XLSX.writeFile(wb, `סבב_חופשה_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 // ── SyncModal ──────────────────────────────────────────────────────────────────
@@ -452,6 +471,16 @@ export default function RotationTab() {
               </>
             )}
           </div>
+          <button
+            onClick={() => exportToExcel(config, periods)}
+            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
+                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
+                       hover:border-success/40 transition-all"
+            title="ייצוא לאקסל"
+          >
+            <FileDown size={14} />
+            ייצוא
+          </button>
           <button
             onClick={() => setShowSettings(true)}
             className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
