@@ -55,14 +55,17 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose} aria-hidden="true">
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="הגדרות"
         className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl p-5 pb-8 space-y-5 slide-in max-w-2xl mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-text text-lg">⚙️ הגדרות</h2>
-          <button onClick={onClose} className="text-text-dim hover:text-text text-xl px-2">✕</button>
+          <button onClick={onClose} aria-label="סגור הגדרות" className="text-text-dim hover:text-text text-xl px-2 min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
         </div>
 
         <div className="space-y-3">
@@ -99,7 +102,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                   </select>
                   <button
                     onClick={() => remove(i)}
-                    className="text-danger hover:opacity-70 text-sm px-1 shrink-0"
+                    aria-label={`מחק סף התראה של ${t.minutes} דקות`}
+                    className="text-danger hover:opacity-70 text-sm px-1 shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
                   >
                     🗑
                   </button>
@@ -177,16 +181,18 @@ export default function App() {
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-lg"
+              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
               title={theme === "dark" ? "מצב יום" : "מצב לילה"}
+              aria-label={theme === "dark" ? "עבור למצב יום" : "עבור למצב לילה"}
             >
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
             {/* Settings */}
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors"
+              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               title="הגדרות"
+              aria-label="הגדרות"
             >
               ⚙️
             </button>
@@ -210,7 +216,8 @@ export default function App() {
             </button>
             <button
               onClick={() => setShowInstall(false)}
-              className="text-text-dim hover:text-text p-1 shrink-0"
+              aria-label="סגור הצעת התקנה"
+              className="text-text-dim hover:text-text p-1 shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               ✕
             </button>
@@ -229,21 +236,24 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 inset-x-0 z-50 bg-bg-deep/95 backdrop-blur border-t border-bg-border">
-        <div className="max-w-2xl mx-auto flex">
+      <nav aria-label="ניווט ראשי" className="fixed bottom-0 inset-x-0 z-50 bg-bg-deep/95 backdrop-blur border-t border-bg-border">
+        <div className="max-w-2xl mx-auto flex" role="tablist">
           {TABS.map((t) => {
             const active = tab === t.id;
             return (
               <button
                 key={t.id}
+                role="tab"
+                aria-selected={active}
+                aria-current={active ? "page" : undefined}
                 onClick={() => setTab(t.id)}
                 className={`relative flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors duration-150
                   ${active ? "text-primary" : "text-text-dim hover:text-text-muted"}`}
               >
-                <span className="text-xl leading-none">{t.icon}</span>
+                <span className="text-xl leading-none" aria-hidden="true">{t.icon}</span>
                 <span>{t.label}</span>
                 {active && (
-                  <span className="absolute bottom-0 w-8 h-0.5 bg-primary rounded-full" />
+                  <span className="absolute bottom-0 w-8 h-0.5 bg-primary rounded-full" aria-hidden="true" />
                 )}
               </button>
             );

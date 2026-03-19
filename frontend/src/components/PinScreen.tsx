@@ -55,7 +55,11 @@ export default function PinScreen({ onSuccess }: { onSuccess: () => void }) {
       </div>
 
       {/* Dots */}
-      <div className={`flex gap-4 ${shake ? "animate-shake" : ""}`}>
+      <div
+        className={`flex gap-4 ${shake ? "animate-shake" : ""}`}
+        aria-label={`קוד PIN: ${digits.length} מתוך 4 ספרות הוזנו`}
+        aria-live="polite"
+      >
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
@@ -71,16 +75,17 @@ export default function PinScreen({ onSuccess }: { onSuccess: () => void }) {
       </div>
 
       {error && (
-        <p className="text-danger text-sm font-medium -mt-4">קוד שגוי, נסה שוב</p>
+        <p role="alert" className="text-danger text-sm font-medium -mt-4">קוד שגוי, נסה שוב</p>
       )}
 
       {/* Numpad */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+      <div className="grid grid-cols-3 gap-3 w-full max-w-xs" role="group" aria-label="לוח מקשים">
         {keys.map((k, i) => (
           <button
             key={i}
             disabled={loading || k === ""}
             onClick={() => (k === "⌫" ? del() : k !== "" ? append(k) : undefined)}
+            aria-label={k === "⌫" ? "מחק ספרה" : k !== "" ? `ספרה ${k}` : undefined}
             className={`h-16 rounded-2xl text-xl font-semibold transition-all duration-100 active:scale-95
               ${k === ""
                 ? "invisible"

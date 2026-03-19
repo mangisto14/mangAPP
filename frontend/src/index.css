@@ -62,12 +62,12 @@
 
   .btn-ghost {
     @apply bg-bg-hover hover:bg-bg-border text-text-muted hover:text-text font-medium
-           px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95;
+           px-3 py-2 rounded-lg transition-all duration-200 active:scale-95 min-h-[44px];
   }
 
   .btn-danger {
     @apply bg-transparent hover:bg-danger/20 text-danger border border-danger/30
-           hover:border-danger/60 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95;
+           hover:border-danger/60 px-3 py-2 rounded-lg transition-all duration-200 active:scale-95 min-h-[44px];
   }
 
   .input {
@@ -119,3 +119,11 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 .slide-in { animation: slide-in 0.2s ease-out; }
+
+/* Accessibility: disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in  { animation: none; }
+  .slide-in { animation: none; }
+  .animate-shake { animation: none; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
