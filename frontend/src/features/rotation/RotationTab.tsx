@@ -260,7 +260,8 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
 
   // Data rows — one row per guard, role cell merged vertically
   let row = 1;
-  for (const role of config.roles) {
+  for (const [roleIdx, role] of config.roles.entries()) {
+    if (roleIdx > 0) row += 1; // empty separator row between roles
     const maxGuards = Math.max(1, ...periods.map((p) => (role.slots[p.slotIndex] ?? []).length));
 
     setCell(row, 0, role.name, {
