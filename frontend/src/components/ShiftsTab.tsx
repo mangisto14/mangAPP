@@ -264,17 +264,13 @@ export default function ShiftsTab() {
         </div>
       )}
 
-      {/* Week indicator */}
-      {filter === "week" && (() => {
-        const { from, to } = currentWeekRange();
-        const fmt = (d: string) => d.split("-").reverse().join("/");
-        return (
-          <div className="text-xs text-primary-light bg-primary/10 px-3 py-1.5 rounded-xl
-                          border border-primary/20 inline-flex items-center gap-2">
-            השבוע: {fmt(from)} – {fmt(to)}
-          </div>
-        );
-      })()}
+      {/* Today indicator */}
+      {filter === "today" && (
+        <div className="text-xs text-primary-light bg-primary/10 px-3 py-1.5 rounded-xl
+                        border border-primary/20 inline-flex items-center gap-2">
+          היום: {todayRange().from.split("-").reverse().join("/")}
+        </div>
+      )}
 
       {/* Content */}
       {loading && <SkeletonShiftCards />}
