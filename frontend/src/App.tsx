@@ -237,7 +237,7 @@ export default function App() {
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 pt-5">
         {tab === "shifts"   && <ShiftsTab />}
-        {tab === "absences" && <AbsencesTab />}
+        {tab === "absences" && !readOnly && <AbsencesTab />}
         {tab === "rotation" && <RotationTab />}
         {tab === "guards"   && <GuardsTab />}
         {tab === "stats"    && <StatsTab />}
@@ -246,7 +246,7 @@ export default function App() {
       {/* Bottom Navigation */}
       <nav aria-label="ניווט ראשי" className="fixed bottom-0 inset-x-0 z-50 bg-bg-deep/95 backdrop-blur border-t border-bg-border">
         <div className="max-w-2xl mx-auto flex" role="tablist">
-          {TABS.map((t) => {
+          {TABS.filter((t) => !(readOnly && t.id === "absences")).map((t) => {
             const active = tab === t.id;
             return (
               <button

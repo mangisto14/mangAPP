@@ -198,14 +198,16 @@ export default function ShiftsTab() {
             {copied ? <Check size={15} className="text-success" /> : <Copy size={15} />}
             {copied ? "הועתק!" : "העתק"}
           </button>
-          <button
-            onClick={handleWhatsApp}
-            className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
-                       border border-success/30 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
-          >
-            <MessageCircle size={15} />
-            שלח
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleWhatsApp}
+              className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
+                         border border-success/30 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
+            >
+              <MessageCircle size={15} />
+              שלח
+            </button>
+          )}
         </div>
       </div>
 
