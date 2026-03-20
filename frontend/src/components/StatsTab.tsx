@@ -65,15 +65,14 @@ function exportMonthlyReport(shifts: Shift[]) {
     Thursday: "חמישי", Friday: "שישי", Saturday: "שבת",
   };
 
-  const rows = ["חודש,יום,תאריך,שם,שעות"];
+  const rows = ["יום,תאריך ושעה,שם,שעות"];
   for (const s of sorted) {
     const d = new Date(s.start_time);
-    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const dayName = HE_DAY[d.toLocaleDateString("en-US", { weekday: "long" })] ?? "";
-    const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+    const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const hrs = (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
     for (const name of s.names) {
-      rows.push(`${month},${dayName},${date},${name},${hrs.toFixed(1)}`);
+      rows.push(`${dayName},${date},${name},${hrs.toFixed(1)}`);
     }
   }
 
