@@ -463,7 +463,7 @@ export default function RotationTab() {
   if (loading) return <SkeletonRotation />;
   if (error || !config) return <div className="fade-in card border-danger/30 text-danger">{error || "שגיאה"}</div>;
 
-  const numPeriods = 9 + extraWeeks * 3;
+  const numPeriods = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0);
   const periods = computePeriods(config, numPeriods);
   const activePeriod = periods.find((p) => p.isActive);
 
