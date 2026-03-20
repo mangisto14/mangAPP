@@ -745,6 +745,7 @@ export default function RotationTab() {
       {showSettings && (
         <EditRotationModal
           config={config}
+          numPeriods={numPeriods}
           guardNames={guardNames}
           guards={guards}
           onClose={() => setShowSettings(false)}

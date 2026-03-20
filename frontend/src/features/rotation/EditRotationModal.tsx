@@ -12,19 +12,20 @@ import GuardAutocomplete from "./GuardAutocomplete";
 
 interface Props {
   config: RotationConfig;
+  numPeriods?: number;
   guardNames: string[];
   guards?: Guard[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function EditRotationModal({ config, guardNames, guards, onClose, onSaved }: Props) {
+export default function EditRotationModal({ config, numPeriods = 9, guardNames, guards, onClose, onSaved }: Props) {
   const [startDate, setStartDate] = useState(config.start_date);
   const [periodDays, setPeriodDays] = useState(String(config.period_days));
   const [roles, setRoles] = useState<RotationRole[]>(
     config.roles.map((r) => ({
       ...r,
-      slots: Array.from({ length: 9 }, (_, i) => r.slots[i] ?? []),
+      slots: Array.from({ length: numPeriods }, (_, i) => r.slots[i] ?? []),
     }))
   );
   const [newRoleName, setNewRoleName] = useState("");
@@ -58,7 +59,7 @@ export default function EditRotationModal({ config, guardNames, guards, onClose,
     if (!name) return;
     setRoles((prev) => [
       ...prev,
-      { id: -Date.now(), name, position: prev.length, slots: Array.from({ length: 9 }, () => []) },
+      { id: -Date.now(), name, position: prev.length, slots: Array.from({ length: numPeriods }, () => []) },
     ]);
     setNewRoleName("");
   };
@@ -164,7 +165,7 @@ export default function EditRotationModal({ config, guardNames, guards, onClose,
                   <Trash2 size={16} />
                 </button>
               </div>
-              {Array.from({ length: 9 }, (_, si) => {
+              {Array.from({ length: numPeriods }, (_, si) => {
                 const periodLabels = ["א-ג", "ג-ה", "ו-א"];
                 return (
                   <div key={si}>
