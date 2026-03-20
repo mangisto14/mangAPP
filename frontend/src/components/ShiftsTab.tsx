@@ -188,7 +188,7 @@ export default function ShiftsTab() {
       {/* Undo toast */}
       {pendingDelete && (
         <div className="fixed bottom-24 right-4 left-4 max-w-sm mx-auto z-50 slide-in">
-          <div className="card border-danger/60 bg-bg-card flex items-center gap-3 shadow-xl">
+          <div className="bg-bg-card border-2 border-danger rounded-2xl p-4 flex items-center gap-3 shadow-2xl">
             <span className="text-danger text-sm flex-1 truncate">
               🗑 מוחק: {pendingDelete.label}
             </span>

@@ -60,14 +60,20 @@ function exportMonthlyReport(shifts: Shift[]) {
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   );
 
-  const rows = ["חודש,תאריך,שם,שעות"];
+  const HE_DAY: Record<string, string> = {
+    Sunday: "ראשון", Monday: "שני", Tuesday: "שלישי", Wednesday: "רביעי",
+    Thursday: "חמישי", Friday: "שישי", Saturday: "שבת",
+  };
+
+  const rows = ["חודש,יום,תאריך,שם,שעות"];
   for (const s of sorted) {
     const d = new Date(s.start_time);
     const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const dayName = HE_DAY[d.toLocaleDateString("en-US", { weekday: "long" })] ?? "";
     const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
     const hrs = (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
     for (const name of s.names) {
-      rows.push(`${month},${date},${name},${hrs.toFixed(1)}`);
+      rows.push(`${month},${dayName},${date},${name},${hrs.toFixed(1)}`);
     }
   }
 
