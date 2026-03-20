@@ -55,23 +55,19 @@ function getMonthlyBuckets(shifts: Shift[], n = 6) {
 // ── Monthly CSV export ────────────────────────────────────────────────────────
 
 function exportMonthlyReport(shifts: Shift[]) {
-  const monthMap: Record<string, Record<string, { count: number; hours: number }>> = {};
-  for (const s of shifts) {
+  // One row per guard per shift, sorted by date
+  const sorted = [...shifts].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+
+  const rows = ["חודש,תאריך,שם,שעות"];
+  for (const s of sorted) {
     const d = new Date(s.start_time);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const date = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
     const hrs = (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
     for (const name of s.names) {
-      if (!monthMap[key]) monthMap[key] = {};
-      if (!monthMap[key][name]) monthMap[key][name] = { count: 0, hours: 0 };
-      monthMap[key][name].count++;
-      monthMap[key][name].hours += hrs;
-    }
-  }
-
-  const rows = ["חודש,שם,משמרות,שעות"];
-  for (const [month, guards] of Object.entries(monthMap).sort()) {
-    for (const [name, data] of Object.entries(guards)) {
-      rows.push(`${month},${name},${data.count},${data.hours.toFixed(1)}`);
+      rows.push(`${month},${date},${name},${hrs.toFixed(1)}`);
     }
   }
 
@@ -188,8 +184,8 @@ export default function StatsTab() {
       {/* ── Monthly export ───────────────────────────────────── */}
       <div className="card flex items-center justify-between gap-3">
         <div>
-          <p className="font-semibold text-text text-sm">דוח חודשי לייצוא שכר</p>
-          <p className="text-xs text-text-dim mt-0.5">CSV עם שעות לכל שומר לכל חודש</p>
+          <p className="font-semibold text-text text-sm">דוח חודשי לייצוא</p>
+          <p className="text-xs text-text-dim mt-0.5">CSV עם תאריך ושעות לכל משמרת לכל שומר</p>
         </div>
         <button
           onClick={() => exportMonthlyReport(shifts)}
