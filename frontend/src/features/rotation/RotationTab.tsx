@@ -17,6 +17,7 @@ import { SkeletonRotation } from "../../components/Skeleton";
 import type { Period } from "./utils";
 import EditRotationModal from "./EditRotationModal";
 import GuardAutocomplete from "./GuardAutocomplete";
+import { useReadOnly } from "../../hooks/useReadOnly";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -411,6 +412,7 @@ export default function RotationTab() {
   const [editRangePeriod, setEditRangePeriod] = useState<Period | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const activePeriodRef = useRef<HTMLTableCellElement>(null);
+  const readOnly = useReadOnly();
 
   const load = async () => {
     setLoading(true);
@@ -493,6 +495,7 @@ export default function RotationTab() {
           </div>
         ) : <div />}
         <div className="flex items-center gap-2">
+          {/* Actions menu — export always visible; edit actions hidden for viewers */}
           <div className="relative">
             <button
               onClick={() => setShowActionsMenu((v) => !v)}
@@ -509,43 +512,47 @@ export default function RotationTab() {
                 <div className="fixed inset-0 z-10" onClick={() => setShowActionsMenu(false)} />
                 <div className="absolute left-0 top-full mt-1 bg-bg-card border border-bg-border
                                 rounded-xl shadow-lg z-20 min-w-[140px] overflow-hidden">
-                  <button
-                    onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n + 1); }}
-                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                               hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
-                  >
-                    הוסף שבוע
-                    <PlusCircle size={13} />
-                  </button>
-                  <button
-                    onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n - 1); }}
-                    disabled={extraWeeks === 0}
-                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                               hover:bg-bg-base/60 transition-colors disabled:opacity-40 flex items-center gap-2 justify-end"
-                  >
-                    הסר שבוע
-                    <MinusCircle size={13} />
-                  </button>
-                  <div className="border-t border-bg-border/50" />
-                  <button
-                    onClick={() => { setShowActionsMenu(false); handleSync(); }}
-                    disabled={syncing}
-                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                               hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
-                  >
-                    סנכרן סבב
-                    <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
-                  </button>
-                  <button
-                    onClick={() => { setShowActionsMenu(false); handleSyncSchedule(); }}
-                    disabled={syncingSchedule}
-                    className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                               hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
-                  >
-                    סנכרן לוח
-                    <CalendarDays size={13} />
-                  </button>
-                  <div className="border-t border-bg-border/50" />
+                  {!readOnly && (
+                    <>
+                      <button
+                        onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n + 1); }}
+                        className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                                   hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
+                      >
+                        הוסף שבוע
+                        <PlusCircle size={13} />
+                      </button>
+                      <button
+                        onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n - 1); }}
+                        disabled={extraWeeks === 0}
+                        className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                                   hover:bg-bg-base/60 transition-colors disabled:opacity-40 flex items-center gap-2 justify-end"
+                      >
+                        הסר שבוע
+                        <MinusCircle size={13} />
+                      </button>
+                      <div className="border-t border-bg-border/50" />
+                      <button
+                        onClick={() => { setShowActionsMenu(false); handleSync(); }}
+                        disabled={syncing}
+                        className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                                   hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
+                      >
+                        סנכרן סבב
+                        <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
+                      </button>
+                      <button
+                        onClick={() => { setShowActionsMenu(false); handleSyncSchedule(); }}
+                        disabled={syncingSchedule}
+                        className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                                   hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
+                      >
+                        סנכרן לוח
+                        <CalendarDays size={13} />
+                      </button>
+                      <div className="border-t border-bg-border/50" />
+                    </>
+                  )}
                   <button
                     onClick={() => { setShowActionsMenu(false); exportToExcel(config, periods); }}
                     className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
@@ -558,15 +565,18 @@ export default function RotationTab() {
               </>
             )}
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
-                       rounded-xl text-sm font-semibold text-text-dim hover:text-text
-                       hover:border-primary/40 transition-all"
-          >
-            <Settings size={14} />
-            הגדרות
-          </button>
+          {/* Settings button — hidden for viewers */}
+          {!readOnly && (
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-1.5 bg-bg-card border border-bg-border px-3 py-1.5
+                         rounded-xl text-sm font-semibold text-text-dim hover:text-text
+                         hover:border-primary/40 transition-all"
+            >
+              <Settings size={14} />
+              הגדרות
+            </button>
+          )}
         </div>
       </div>
 
@@ -631,33 +641,39 @@ export default function RotationTab() {
                     }`}
                 >
                   <div className="flex flex-col items-center gap-0.5">
-                    <button
-                      onClick={() => setEditRangePeriod(p)}
-                      className="hover:text-primary transition-colors underline decoration-dotted underline-offset-2"
-                      title="עדכון טווח תאריכים לחופשה"
-                    >
-                      {p.label}
-                    </button>
+                    {readOnly ? (
+                      <span>{p.label}</span>
+                    ) : (
+                      <button
+                        onClick={() => setEditRangePeriod(p)}
+                        className="hover:text-primary transition-colors underline decoration-dotted underline-offset-2"
+                        title="עדכון טווח תאריכים לחופשה"
+                      >
+                        {p.label}
+                      </button>
+                    )}
                     <span className={`text-[10px] font-normal
                       ${p.isActive ? "text-primary-light" : "text-text-dim/60"}`}>
                       {p.periodLabel}
                     </span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <button
-                        onClick={() => setEditRangePeriod(p)}
-                        className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
-                        title="עדכן טווח תאריכים"
-                      >
-                        <CalendarDays size={10} />
-                      </button>
-                      <button
-                        onClick={() => setEditSlot(p.slotIndex)}
-                        className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
-                        title="ערוך תקופה"
-                      >
-                        <Pencil size={10} />
-                      </button>
-                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <button
+                          onClick={() => setEditRangePeriod(p)}
+                          className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
+                          title="עדכן טווח תאריכים"
+                        >
+                          <CalendarDays size={10} />
+                        </button>
+                        <button
+                          onClick={() => setEditSlot(p.slotIndex)}
+                          className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
+                          title="ערוך תקופה"
+                        >
+                          <Pencil size={10} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </th>
               ))}
@@ -674,9 +690,9 @@ export default function RotationTab() {
                   return (
                     <td
                       key={p.slotIndex}
-                      onClick={() => setEditSlot(p.slotIndex)}
-                      className={`py-2 px-1 text-center align-top cursor-pointer
-                        hover:bg-bg-card/60 transition-colors
+                      onClick={() => !readOnly && setEditSlot(p.slotIndex)}
+                      className={`py-2 px-1 text-center align-top transition-colors
+                        ${!readOnly ? "cursor-pointer hover:bg-bg-card/60" : ""}
                         ${p.isActive ? "bg-primary/5 border-x border-primary/25" : ""}`}
                     >
                       {names.length === 0 ? (

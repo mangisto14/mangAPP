@@ -10,6 +10,7 @@ import { getRotation } from "../rotation/api";
 import type { RotationConfig } from "../rotation/types";
 import { computePeriods } from "../rotation/utils";
 import { SkeletonAbsenceCards, SkeletonTableRows } from "../../components/Skeleton";
+import { useReadOnly } from "../../hooks/useReadOnly";
 
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
@@ -250,6 +251,7 @@ export default function AbsencesTab() {
   const [error, setError] = useState("");
   const [view, setView] = useState<"now" | "history">("now");
   const [search, setSearch] = useState("");
+  const readOnly = useReadOnly();
   const [pendingLeave, setPendingLeave] = useState<{ id: number; name: string } | null>(null);
   const [pendingBulkLeave, setPendingBulkLeave] = useState(false);
   const [pendingRotationLeave, setPendingRotationLeave] = useState(false);
@@ -509,22 +511,24 @@ export default function AbsencesTab() {
                         </div>
                         {a.left_at && <Clock leftAt={a.left_at} level={alertLevel} />}
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          className="btn-ghost text-xs px-2 py-1"
-                          disabled={busy === a.guard_id}
-                          onClick={() => doAction(() => resetAbsence(a.guard_id), a.guard_id)}
-                        >
-                          🔄
-                        </button>
-                        <button
-                          className="btn-primary text-xs px-3 py-1.5"
-                          disabled={busy === a.guard_id}
-                          onClick={() => doAction(() => markReturn(a.guard_id), a.guard_id)}
-                        >
-                          חזר ✅
-                        </button>
-                      </div>
+                      {!readOnly && (
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            className="btn-ghost text-xs px-2 py-1"
+                            disabled={busy === a.guard_id}
+                            onClick={() => doAction(() => resetAbsence(a.guard_id), a.guard_id)}
+                          >
+                            🔄
+                          </button>
+                          <button
+                            className="btn-primary text-xs px-3 py-1.5"
+                            disabled={busy === a.guard_id}
+                            onClick={() => doAction(() => markReturn(a.guard_id), a.guard_id)}
+                          >
+                            חזר ✅
+                          </button>
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -567,13 +571,15 @@ export default function AbsencesTab() {
                           {insideInRotation.length}
                         </span>
                       </p>
-                      <button
-                        className="btn-danger text-xs px-2 py-1"
-                        disabled={bulkBusy}
-                        onClick={() => setPendingRotationLeave(true)}
-                      >
-                        כולם יצאו 🚪
-                      </button>
+                      {!readOnly && (
+                        <button
+                          className="btn-danger text-xs px-2 py-1"
+                          disabled={bulkBusy}
+                          onClick={() => setPendingRotationLeave(true)}
+                        >
+                          כולם יצאו 🚪
+                        </button>
+                      )}
                     </div>
                     <ul className="space-y-2">
                       {insideInRotation.map((a) => {
@@ -598,13 +604,15 @@ export default function AbsencesTab() {
                                 </span>
                               )}
                             </div>
-                            <button
-                              className="btn-danger text-xs px-3 py-1.5 shrink-0"
-                              disabled={busy === a.guard_id}
-                              onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
-                            >
-                              יצא 🚪
-                            </button>
+                            {!readOnly && (
+                              <button
+                                className="btn-danger text-xs px-3 py-1.5 shrink-0"
+                                disabled={busy === a.guard_id}
+                                onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                              >
+                                יצא 🚪
+                              </button>
+                            )}
                           </li>
                         );
                       })}
@@ -639,13 +647,15 @@ export default function AbsencesTab() {
                                 </span>
                               )}
                             </div>
-                            <button
-                              className="btn-danger text-xs px-3 py-1.5 shrink-0"
-                              disabled={busy === a.guard_id}
-                              onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
-                            >
-                              יצא 🚪
-                            </button>
+                            {!readOnly && (
+                              <button
+                                className="btn-danger text-xs px-3 py-1.5 shrink-0"
+                                disabled={busy === a.guard_id}
+                                onClick={() => setPendingLeave({ id: a.guard_id, name: a.name })}
+                              >
+                                יצא 🚪
+                              </button>
+                            )}
                           </li>
                         );
                       })}
@@ -658,8 +668,8 @@ export default function AbsencesTab() {
         </>
       )}
 
-      {/* ── Bulk action bar ── */}
-      {hasSelection && view === "now" && (
+      {/* ── Bulk action bar — hidden for viewers ── */}
+      {hasSelection && view === "now" && !readOnly && (
         <div
           className="fixed bottom-16 inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
           dir="rtl"

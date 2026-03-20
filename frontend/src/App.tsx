@@ -9,6 +9,7 @@ import { getSettings, updateSettings } from "./features/absences/api";
 import type { AlertThreshold } from "./features/absences/types";
 import { useTheme } from "./hooks/useTheme";
 import { useFontSize } from "./hooks/useFontSize";
+import { ReadOnlyContext } from "./hooks/useReadOnly";
 import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
 
 const TABS = [
@@ -125,6 +126,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 export default function App() {
   const [tab, setTab] = useState<TabId>("shifts");
   const [pinReady, setPinReady] = useState<boolean | null>(null);
+  const [readOnly, setReadOnly] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
   const { increase, decrease, canIncrease, canDecrease } = useFontSize();
@@ -157,6 +159,7 @@ export default function App() {
   // PIN gate
   useEffect(() => {
     if (sessionStorage.getItem("pin_ok") === "1") {
+      setReadOnly(sessionStorage.getItem("pin_mode") === "viewer");
       setPinReady(true);
       return;
     }
@@ -167,9 +170,12 @@ export default function App() {
   }, []);
 
   if (pinReady === null) return null;
-  if (pinReady === false) return <PinScreen onSuccess={() => setPinReady(true)} />;
+  if (pinReady === false) return (
+    <PinScreen onSuccess={(mode) => { setReadOnly(mode === "viewer"); setPinReady(true); }} />
+  );
 
   return (
+    <ReadOnlyContext.Provider value={readOnly}>
     <div className="min-h-screen pb-20">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-bg-deep/90 backdrop-blur border-b border-bg-border">
@@ -188,15 +194,17 @@ export default function App() {
             >
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
-            {/* Settings */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              title="הגדרות"
-              aria-label="הגדרות"
-            >
-              ⚙️
-            </button>
+            {/* Settings — hidden for viewers */}
+            {!readOnly && (
+              <button
+                onClick={() => setShowSettings(true)}
+                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="הגדרות"
+                aria-label="הגדרות"
+              >
+                ⚙️
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -283,5 +291,6 @@ export default function App() {
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
+    </ReadOnlyContext.Provider>
   );
 }

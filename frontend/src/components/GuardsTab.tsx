@@ -3,6 +3,7 @@ import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown } from "lucide-react
 import { getGuards, addGuards, updateGuard, deleteGuard } from "../api";
 import type { Guard } from "../types";
 import { SkeletonGuardCards } from "./Skeleton";
+import { useReadOnly } from "../hooks/useReadOnly";
 
 interface EditState {
   name: string;
@@ -17,6 +18,7 @@ export default function GuardsTab() {
   const [edits, setEdits] = useState<Record<number, EditState>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
   const [toast, setToast] = useState("");
+  const readOnly = useReadOnly();
 
   const load = async () => {
     setLoading(true);
@@ -113,24 +115,26 @@ export default function GuardsTab() {
         </div>
       )}
 
-      {/* Add */}
-      <div className="card space-y-3">
-        <h2 className="font-bold text-text flex items-center gap-2">
-          <UserPlus size={16} className="text-primary-light" />
-          הוספת אנשים
-        </h2>
-        <div className="flex gap-2">
-          <input
-            value={addInput}
-            onChange={(e) => setAddInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder="ישראל ישראלי, משה כהן, ..."
-            className="input flex-1"
-          />
-          <button onClick={handleAdd} className="btn-primary px-5">הוסף</button>
+      {/* Add — hidden for viewers */}
+      {!readOnly && (
+        <div className="card space-y-3">
+          <h2 className="font-bold text-text flex items-center gap-2">
+            <UserPlus size={16} className="text-primary-light" />
+            הוספת אנשים
+          </h2>
+          <div className="flex gap-2">
+            <input
+              value={addInput}
+              onChange={(e) => setAddInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              placeholder="ישראל ישראלי, משה כהן, ..."
+              className="input flex-1"
+            />
+            <button onClick={handleAdd} className="btn-primary px-5">הוסף</button>
+          </div>
+          <p className="text-xs text-text-dim">ניתן להוסיף מספר אנשים, מופרדים בפסיק</p>
         </div>
-        <p className="text-xs text-text-dim">ניתן להוסיף מספר אנשים, מופרדים בפסיק</p>
-      </div>
+      )}
 
       {/* List */}
       <div className="card space-y-2">
@@ -174,33 +178,40 @@ export default function GuardsTab() {
                 <div className="flex items-center gap-2 p-2.5">
                   <input
                     value={e?.name ?? g.name}
-                    onChange={(ev) => setField(g.id, "name", ev.target.value)}
-                    onKeyDown={(ev) => ev.key === "Enter" && handleUpdate(g.id)}
-                    className="input flex-1 text-sm py-1.5 h-8"
+                    onChange={(ev) => !readOnly && setField(g.id, "name", ev.target.value)}
+                    onKeyDown={(ev) => ev.key === "Enter" && !readOnly && handleUpdate(g.id)}
+                    readOnly={readOnly}
+                    className={`input flex-1 text-sm py-1.5 h-8 ${readOnly ? "cursor-default" : ""}`}
                   />
                   <div className="flex gap-1 shrink-0">
                     <span className="pill-past">✅ {g.past}</span>
                     <span className="pill-future">🕐 {g.future}</span>
                   </div>
-                  <button
-                    onClick={() => setExpanded(isOpen ? null : g.id)}
-                    className="p-1.5 text-text-dim hover:text-text rounded-lg hover:bg-bg-border transition-colors"
-                    title="פרטים נוספים"
-                  >
-                    <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  <button
-                    onClick={() => handleUpdate(g.id)}
-                    className="p-1.5 text-text-dim hover:text-success rounded-lg hover:bg-success/10 transition-colors"
-                  >
-                    <Save size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(g)}
-                    className="p-1.5 text-text-dim hover:text-danger rounded-lg hover:bg-danger/10 transition-colors"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => setExpanded(isOpen ? null : g.id)}
+                      className="p-1.5 text-text-dim hover:text-text rounded-lg hover:bg-bg-border transition-colors"
+                      title="פרטים נוספים"
+                    >
+                      <ChevronDown size={14} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                    </button>
+                  )}
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleUpdate(g.id)}
+                      className="p-1.5 text-text-dim hover:text-success rounded-lg hover:bg-success/10 transition-colors"
+                    >
+                      <Save size={15} />
+                    </button>
+                  )}
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleDelete(g)}
+                      className="p-1.5 text-text-dim hover:text-danger rounded-lg hover:bg-danger/10 transition-colors"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Expanded: phone + role */}

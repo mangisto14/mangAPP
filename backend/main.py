@@ -842,10 +842,15 @@ def pin_required():
 
 @app.get("/api/pin/verify")
 def verify_pin(pin: str = Query(...)):
-    expected = os.getenv("PIN_CODE", "")
-    if not expected:
-        return {"ok": True}
-    return {"ok": pin == expected}
+    admin_pin = os.getenv("PIN_CODE", "")
+    viewer_pin = os.getenv("VIEWER_PIN_CODE", "")
+    if not admin_pin:
+        return {"ok": True, "mode": "admin"}
+    if pin == admin_pin:
+        return {"ok": True, "mode": "admin"}
+    if viewer_pin and pin == viewer_pin:
+        return {"ok": True, "mode": "viewer"}
+    return {"ok": False}
 
 
 # ── Guards ────────────────────────────────────────────────────────────────────

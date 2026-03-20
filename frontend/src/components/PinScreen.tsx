@@ -2,14 +2,14 @@ import { useState } from "react";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "") + "/api";
 
-async function verifyPin(pin: string): Promise<boolean> {
+async function verifyPin(pin: string): Promise<{ ok: boolean; mode: "admin" | "viewer" }> {
   const res = await fetch(`${BASE}/pin/verify?pin=${pin}`);
-  if (!res.ok) return false;
+  if (!res.ok) return { ok: false, mode: "admin" };
   const data = await res.json();
-  return data.ok;
+  return { ok: data.ok, mode: data.mode ?? "admin" };
 }
 
-export default function PinScreen({ onSuccess }: { onSuccess: () => void }) {
+export default function PinScreen({ onSuccess }: { onSuccess: (mode: "admin" | "viewer") => void }) {
   const [digits, setDigits] = useState<string[]>([]);
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
@@ -23,11 +23,12 @@ export default function PinScreen({ onSuccess }: { onSuccess: () => void }) {
 
     if (next.length === 4) {
       setLoading(true);
-      const ok = await verifyPin(next.join(""));
+      const result = await verifyPin(next.join(""));
       setLoading(false);
-      if (ok) {
+      if (result.ok) {
         sessionStorage.setItem("pin_ok", "1");
-        onSuccess();
+        sessionStorage.setItem("pin_mode", result.mode);
+        onSuccess(result.mode);
       } else {
         setShake(true);
         setError(true);
