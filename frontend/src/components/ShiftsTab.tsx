@@ -6,7 +6,7 @@ import AddShiftTab from "./AddShiftTab";
 import { SkeletonShiftCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
 
-type Filter = "all" | "future" | "past" | "week" | "range";
+type Filter = "all" | "future" | "past" | "today" | "range";
 
 const HE_DAY: Record<string, string> = {
   Sunday: "ראשון",
@@ -37,16 +37,10 @@ function toYMD(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-/** Returns the Monday and Sunday of the current week */
-function currentWeekRange(): { from: string; to: string } {
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun … 6=Sat
-  // We treat Sunday as the first day of the week (Israel style)
-  const sunday = new Date(now);
-  sunday.setDate(now.getDate() - day);
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
-  return { from: toYMD(sunday), to: toYMD(saturday) };
+/** Returns today's date as a range (from=to=today) */
+function todayRange(): { from: string; to: string } {
+  const today = toYMD(new Date());
+  return { from: today, to: today };
 }
 
 export default function ShiftsTab() {
@@ -66,8 +60,8 @@ export default function ShiftsTab() {
     from?: string;
     to?: string;
   } {
-    if (filter === "week") {
-      const { from, to } = currentWeekRange();
+    if (filter === "today") {
+      const { from, to } = todayRange();
       return { backendFilter: "all", from, to };
     }
     if (filter === "range") {
@@ -124,10 +118,10 @@ export default function ShiftsTab() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleWeek = () => {
+  const handleToday = () => {
     setDateFrom("");
     setDateTo("");
-    setFilter("week");
+    setFilter("today");
   };
 
   const handleFilterBtn = (f: Filter) => {
@@ -162,10 +156,10 @@ export default function ShiftsTab() {
   }
 
   const FILTERS: { id: Filter; label: string }[] = [
-    { id: "all", label: "הכל" },
+    { id: "today", label: "היום" },
     { id: "future", label: "עתידי" },
     { id: "past", label: "עבר" },
-    { id: "week", label: "השבוע" },
+    { id: "all", label: "הכל" },
     { id: "range", label: "טווח" },
   ];
 
@@ -177,7 +171,7 @@ export default function ShiftsTab() {
           {FILTERS.map((f) => (
             <button
               key={f.id}
-              onClick={() => f.id === "week" ? handleWeek() : handleFilterBtn(f.id)}
+              onClick={() => f.id === "today" ? handleToday() : handleFilterBtn(f.id)}
               className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
                 filter === f.id
                   ? "bg-primary text-white shadow shadow-primary/30"
