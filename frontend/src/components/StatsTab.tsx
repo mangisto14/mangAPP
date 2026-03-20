@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { getStats } from "../api";
-import type { Stats } from "../types";
+import { getShifts } from "../api";
+import type { Stats, Shift } from "../types";
 import { SkeletonStatCards } from "./Skeleton";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -11,26 +12,135 @@ const RANK_BG = [
   "border-orange-700/30 bg-orange-700/5",
 ];
 
+const HE_MONTHS = ["ינ׳","פב׳","מר׳","אפ׳","מי׳","יו׳","יל׳","אג׳","ספ׳","אוק׳","נו׳","דצ׳"];
+
+// ── Weekly / Monthly bucket helpers ──────────────────────────────────────────
+
+function getWeeklyBuckets(shifts: Shift[], n = 8) {
+  const now = new Date();
+  // Align to start of current week (Sunday)
+  const startOfThisWeek = new Date(now);
+  startOfThisWeek.setDate(now.getDate() - now.getDay());
+  startOfThisWeek.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: n }, (_, i) => {
+    const weekStart = new Date(startOfThisWeek);
+    weekStart.setDate(startOfThisWeek.getDate() - (n - 1 - i) * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
+    const label = `${weekStart.getDate()}/${weekStart.getMonth() + 1}`;
+    const count = shifts.filter((s) => {
+      const d = new Date(s.start_time);
+      return d >= weekStart && d < weekEnd;
+    }).length;
+    return { label, count };
+  });
+}
+
+function getMonthlyBuckets(shifts: Shift[], n = 6) {
+  const now = new Date();
+  return Array.from({ length: n }, (_, i) => {
+    const offset = n - 1 - i;
+    const month = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() - offset + 1, 1);
+    const label = HE_MONTHS[month.getMonth()];
+    const count = shifts.filter((s) => {
+      const d = new Date(s.start_time);
+      return d >= month && d < nextMonth;
+    }).length;
+    return { label, count };
+  });
+}
+
+// ── Monthly CSV export ────────────────────────────────────────────────────────
+
+function exportMonthlyReport(shifts: Shift[]) {
+  const monthMap: Record<string, Record<string, { count: number; hours: number }>> = {};
+  for (const s of shifts) {
+    const d = new Date(s.start_time);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const hrs = (new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
+    for (const name of s.names) {
+      if (!monthMap[key]) monthMap[key] = {};
+      if (!monthMap[key][name]) monthMap[key][name] = { count: 0, hours: 0 };
+      monthMap[key][name].count++;
+      monthMap[key][name].hours += hrs;
+    }
+  }
+
+  const rows = ["חודש,שם,משמרות,שעות"];
+  for (const [month, guards] of Object.entries(monthMap).sort()) {
+    for (const [name, data] of Object.entries(guards)) {
+      rows.push(`${month},${name},${data.count},${data.hours.toFixed(1)}`);
+    }
+  }
+
+  const blob = new Blob(["\ufeff" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `monthly-report-${new Date().toISOString().slice(0, 7)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Mini bar chart ────────────────────────────────────────────────────────────
+
+function BarChart({ buckets }: { buckets: { label: string; count: number }[] }) {
+  const max = Math.max(...buckets.map((b) => b.count), 1);
+  return (
+    <div className="flex items-end gap-1 h-20 w-full">
+      {buckets.map((b, i) => {
+        const pct = Math.round((b.count / max) * 100);
+        const isLast = i === buckets.length - 1;
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-[9px] text-text-dim tabular-nums">
+              {b.count > 0 ? b.count : ""}
+            </span>
+            <div className="w-full flex items-end" style={{ height: 44 }}>
+              <div
+                style={{ height: `${Math.max(pct, 4)}%` }}
+                className={`w-full rounded-t transition-all ${
+                  isLast ? "bg-primary/70" : "bg-primary/30"
+                }`}
+              />
+            </div>
+            <span className="text-[9px] text-text-dim leading-tight text-center">{b.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function StatsTab() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartView, setChartView] = useState<"weekly" | "monthly">("weekly");
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
-    getStats()
-      .then(setStats)
+    Promise.all([getStats(), getShifts("past")])
+      .then(([s, sh]) => { setStats(s); setShifts(sh); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return <SkeletonStatCards />;
-  }
-  if (!stats) {
-    return <div className="card text-danger">שגיאה בטעינת נתונים</div>;
-  }
+  if (loading) return <SkeletonStatCards />;
+  if (!stats) return <div className="card text-danger">שגיאה בטעינת נתונים</div>;
 
   const maxTotal = Math.max(...stats.guards.map((g) => g.total), 1);
   const overloaded = stats.guards.filter((g) => g.overloaded);
+  const inactive = stats.guards.filter((g) => g.future === 0);
+
+  const buckets =
+    chartView === "weekly"
+      ? getWeeklyBuckets(shifts, 8)
+      : getMonthlyBuckets(shifts, 6);
 
   return (
     <div className="fade-in space-y-4">
@@ -49,6 +159,48 @@ export default function StatsTab() {
         ))}
       </div>
 
+      {/* ── Trend chart ──────────────────────────────────────── */}
+      <div className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-text">מגמת משמרות</h2>
+          <div className="flex gap-1">
+            {(["weekly", "monthly"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setChartView(v)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  chartView === v
+                    ? "bg-primary text-white"
+                    : "bg-bg-base text-text-muted hover:text-text"
+                }`}
+              >
+                {v === "weekly" ? "שבועי" : "חודשי"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <BarChart buckets={buckets} />
+        <p className="text-[10px] text-text-dim text-center">
+          {chartView === "weekly" ? "8 שבועות אחרונים" : "6 חודשים אחרונים"}
+        </p>
+      </div>
+
+      {/* ── Monthly export ───────────────────────────────────── */}
+      <div className="card flex items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold text-text text-sm">דוח חודשי לייצוא שכר</p>
+          <p className="text-xs text-text-dim mt-0.5">CSV עם שעות לכל שומר לכל חודש</p>
+        </div>
+        <button
+          onClick={() => exportMonthlyReport(shifts)}
+          className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
+                     border border-success/30 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all shrink-0"
+        >
+          <Download size={14} />
+          ייצוא CSV
+        </button>
+      </div>
+
       {/* ── Overload Alert ─────────────────────────────────────── */}
       {overloaded.length > 0 && (
         <div className="card border-warning/40 bg-warning/5 slide-in">
@@ -65,6 +217,44 @@ export default function StatsTab() {
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Inactive guards ──────────────────────────────────── */}
+      {inactive.length > 0 && (
+        <div className="card border-text-dim/20 bg-bg-base">
+          <button
+            onClick={() => setShowInactive((v) => !v)}
+            className="w-full flex items-center justify-between gap-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">😴</span>
+              <div className="text-right">
+                <p className="font-semibold text-text text-sm">
+                  {inactive.length} שומרים ללא משמרת עתידית
+                </p>
+                <p className="text-xs text-text-dim">לחץ לפירוט</p>
+              </div>
+            </div>
+            {showInactive ? (
+              <ChevronUp size={16} className="text-text-dim shrink-0" />
+            ) : (
+              <ChevronDown size={16} className="text-text-dim shrink-0" />
+            )}
+          </button>
+          {showInactive && (
+            <div className="mt-3 flex flex-wrap gap-2 slide-in">
+              {inactive.map((g) => (
+                <span
+                  key={g.name}
+                  className="text-xs bg-bg-border text-text-muted px-2.5 py-1 rounded-full"
+                >
+                  {g.name}
+                  {g.total === 0 ? " · חדש" : ` · ${g.past} עבר`}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -115,14 +305,8 @@ export default function StatsTab() {
                     style={{ width: `${barWidth}%` }}
                     className="h-full flex rounded-full overflow-hidden"
                   >
-                    <div
-                      style={{ width: `${pastPct}%` }}
-                      className="bg-success/60 h-full"
-                    />
-                    <div
-                      style={{ width: `${futurePct}%` }}
-                      className="bg-warning/60 h-full"
-                    />
+                    <div style={{ width: `${pastPct}%` }} className="bg-success/60 h-full" />
+                    <div style={{ width: `${futurePct}%` }} className="bg-warning/60 h-full" />
                   </div>
                 </div>
               </div>

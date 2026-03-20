@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown, Undo2 } from "lucide-react";
 import { getGuards, addGuards, updateGuard, deleteGuard } from "../api";
 import type { Guard } from "../types";
 import { SkeletonGuardCards } from "./Skeleton";
@@ -18,6 +18,8 @@ export default function GuardsTab() {
   const [edits, setEdits] = useState<Record<number, EditState>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
   const [toast, setToast] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string } | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readOnly = useReadOnly();
 
   const load = async () => {
@@ -76,10 +78,19 @@ export default function GuardsTab() {
     }
   };
 
-  const handleDelete = async (guard: Guard) => {
-    if (!confirm(`למחוק את ${guard.name}?`)) return;
-    await deleteGuard(guard.id);
-    load();
+  const handleDelete = (guard: Guard) => {
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    setPendingDelete({ id: guard.id, name: guard.name });
+    deleteTimerRef.current = setTimeout(async () => {
+      await deleteGuard(guard.id);
+      setPendingDelete(null);
+      load();
+    }, 5000);
+  };
+
+  const cancelDelete = () => {
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    setPendingDelete(null);
   };
 
   const setField = (id: number, field: keyof EditState, value: string) =>
@@ -93,6 +104,25 @@ export default function GuardsTab() {
         <div className="fixed top-20 right-4 left-4 max-w-sm mx-auto z-50">
           <div className="card border-primary/40 bg-primary/10 text-text text-sm text-center font-medium slide-in">
             {toast}
+          </div>
+        </div>
+      )}
+
+      {/* Undo delete toast */}
+      {pendingDelete && (
+        <div className="fixed bottom-24 right-4 left-4 max-w-sm mx-auto z-50 slide-in">
+          <div className="card border-danger/40 bg-danger/10 flex items-center gap-3 shadow-lg">
+            <span className="text-danger text-sm flex-1 truncate">
+              🗑 מוחק: {pendingDelete.name}
+            </span>
+            <button
+              onClick={cancelDelete}
+              className="flex items-center gap-1 text-xs font-bold text-danger border border-danger/40
+                         hover:bg-danger/10 px-2.5 py-1.5 rounded-lg transition-all shrink-0"
+            >
+              <Undo2 size={13} />
+              בטל
+            </button>
           </div>
         </div>
       )}
@@ -207,7 +237,12 @@ export default function GuardsTab() {
                   {!readOnly && (
                     <button
                       onClick={() => handleDelete(g)}
-                      className="p-1.5 text-text-dim hover:text-danger rounded-lg hover:bg-danger/10 transition-colors"
+                      disabled={pendingDelete?.id === g.id}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        pendingDelete?.id === g.id
+                          ? "text-danger opacity-40 cursor-not-allowed"
+                          : "text-text-dim hover:text-danger hover:bg-danger/10"
+                      }`}
                     >
                       <Trash2 size={15} />
                     </button>

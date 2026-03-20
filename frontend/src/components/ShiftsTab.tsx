@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
-import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
 import AddShiftTab from "./AddShiftTab";
 import { SkeletonShiftCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
+
+interface PendingDelete {
+  id: number;
+  label: string;
+}
 
 type Filter = "all" | "future" | "past" | "today" | "range";
 
@@ -52,6 +57,8 @@ export default function ShiftsTab() {
   const [error, setError] = useState("");
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readOnly = useReadOnly();
 
   /** Derive the backend filter + date range from UI state */
@@ -96,10 +103,23 @@ export default function ShiftsTab() {
     setCollapsedDates(new Set(entries.slice(1)));
   }, [filter, dateFrom, dateTo, shifts.length]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("למחוק משמרת זו?")) return;
-    await deleteShift(id);
-    load();
+  const handleDelete = (shift: Shift) => {
+    // Cancel any existing pending delete
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+
+    const label = `${formatTime(shift.start_time)}–${formatTime(shift.end_time)} · ${shift.names.join(", ")}`;
+    setPendingDelete({ id: shift.id, label });
+
+    deleteTimerRef.current = setTimeout(async () => {
+      await deleteShift(shift.id);
+      setPendingDelete(null);
+      load();
+    }, 5000);
+  };
+
+  const cancelDelete = () => {
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    setPendingDelete(null);
   };
 
   const [copied, setCopied] = useState(false);
@@ -165,6 +185,24 @@ export default function ShiftsTab() {
 
   return (
     <div className="fade-in space-y-4">
+      {/* Undo toast */}
+      {pendingDelete && (
+        <div className="fixed bottom-24 right-4 left-4 max-w-sm mx-auto z-50 slide-in">
+          <div className="card border-danger/40 bg-danger/10 flex items-center gap-3 shadow-lg">
+            <span className="text-danger text-sm flex-1 truncate">
+              🗑 מוחק: {pendingDelete.label}
+            </span>
+            <button
+              onClick={cancelDelete}
+              className="flex items-center gap-1 text-xs font-bold text-danger border border-danger/40
+                         hover:bg-danger/10 px-2.5 py-1.5 rounded-lg transition-all shrink-0"
+            >
+              <Undo2 size={13} />
+              בטל
+            </button>
+          </div>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-2 flex-wrap">
@@ -323,13 +361,19 @@ export default function ShiftsTab() {
                       {s.names.join(", ")}
                     </span>
                   </div>
-                  {!readOnly && <button
-                    onClick={() => handleDelete(s.id)}
-                    className="flex-shrink-0 text-text-dim hover:text-danger transition-colors p-1 rounded-lg
-                               hover:bg-danger/10"
-                  >
-                    <Trash2 size={15} />
-                  </button>}
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleDelete(s)}
+                      disabled={pendingDelete?.id === s.id}
+                      className={`flex-shrink-0 transition-colors p-1 rounded-lg hover:bg-danger/10 ${
+                        pendingDelete?.id === s.id
+                          ? "text-danger opacity-40 cursor-not-allowed"
+                          : "text-text-dim hover:text-danger"
+                      }`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
