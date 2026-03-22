@@ -8,6 +8,7 @@ import RotationTab from "./features/rotation/RotationTab";
 import { getSettings, updateSettings } from "./features/absences/api";
 import type { AlertThreshold } from "./features/absences/types";
 import { useTheme } from "./hooks/useTheme";
+import { useDesign } from "./hooks/useDesign";
 import { useFontSize } from "./hooks/useFontSize";
 import { ReadOnlyContext } from "./hooks/useReadOnly";
 import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
@@ -129,6 +130,7 @@ export default function App() {
   const [readOnly, setReadOnly] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
+  const { design, setVariant: setDesign } = useDesign();
   const { increase, decrease, canIncrease, canDecrease } = useFontSize();
 
   // PWA install prompt
@@ -178,36 +180,99 @@ export default function App() {
     <ReadOnlyContext.Provider value={readOnly}>
     <div className="min-h-screen pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-bg-deep/90 backdrop-blur border-b border-bg-border">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-text">מצבת כוח</h1>
-            <p className="text-xs text-text-dim">ניהול מצבת כוח</p>
-          </div>
-          <div className="flex items-center gap-1">
-            {/* Theme toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
-              title={theme === "dark" ? "מצב יום" : "מצב לילה"}
-              aria-label={theme === "dark" ? "עבור למצב יום" : "עבור למצב לילה"}
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
-            {/* Settings — hidden for viewers */}
-            {!readOnly && (
+      {design === "material" ? (
+        /* ── Material Design header (per design_spec) ── */
+        <header className="sticky top-0 z-50 bg-bg-card/90 backdrop-blur-xl border-b border-bg-border/30 shadow-sm">
+          <div className="flex flex-row-reverse justify-between items-center px-4 py-3 max-w-7xl mx-auto">
+            {/* Right: title */}
+            <div className="flex flex-col items-end">
+              <span className="font-semibold text-lg text-text">מצבת כוח</span>
+              <span className="text-xs text-text-dim">ניהול מצבת כוח</span>
+            </div>
+            {/* Left: actions */}
+            <div className="flex items-center gap-2">
+              {/* Design switcher */}
               <button
-                onClick={() => setShowSettings(true)}
-                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                title="הגדרות"
-                aria-label="הגדרות"
+                onClick={() => setDesign("classic")}
+                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-bg-border text-text-muted hover:bg-bg-hover transition-colors"
+                title="עבור לעיצוב קלאסי"
               >
-                ⚙️
+                קלאסי
               </button>
-            )}
+              {/* Theme toggle (material uses light by default but still supports toggle) */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title={theme === "dark" ? "מצב יום" : "מצב לילה"}
+                aria-label={theme === "dark" ? "עבור למצב יום" : "עבור למצב לילה"}
+              >
+                <span className="material-symbols-outlined text-[22px]">
+                  {theme === "dark" ? "light_mode" : "dark_mode"}
+                </span>
+              </button>
+              {/* Notifications */}
+              <button
+                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="התראות"
+              >
+                <span className="material-symbols-outlined text-[22px]">notifications</span>
+              </button>
+              {/* Settings */}
+              {!readOnly && (
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  title="הגדרות"
+                  aria-label="הגדרות"
+                >
+                  <span className="material-symbols-outlined text-[22px]">settings</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      ) : (
+        /* ── Classic header ── */
+        <header className="sticky top-0 z-50 bg-bg-deep/90 backdrop-blur border-b border-bg-border">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold text-text">מצבת כוח</h1>
+              <p className="text-xs text-text-dim">ניהול מצבת כוח</p>
+            </div>
+            <div className="flex items-center gap-1">
+              {/* Design switcher */}
+              <button
+                onClick={() => setDesign("material")}
+                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="עבור לעיצוב Material"
+                aria-label="החלף עיצוב"
+              >
+                🎨
+              </button>
+              {/* Theme toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title={theme === "dark" ? "מצב יום" : "מצב לילה"}
+                aria-label={theme === "dark" ? "עבור למצב יום" : "עבור למצב לילה"}
+              >
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
+              {/* Settings — hidden for viewers */}
+              {!readOnly && (
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  title="הגדרות"
+                  aria-label="הגדרות"
+                >
+                  ⚙️
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+      )}
 
       {/* PWA install banner */}
       {showInstall && (
@@ -244,8 +309,15 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav aria-label="ניווט ראשי" className="fixed bottom-0 inset-x-0 z-50 bg-bg-deep/95 backdrop-blur border-t border-bg-border">
-        <div className="max-w-2xl mx-auto flex" role="tablist">
+      <nav
+        aria-label="ניווט ראשי"
+        className={
+          design === "material"
+            ? "fixed bottom-0 inset-x-0 z-50 bg-bg-card/85 backdrop-blur-2xl border-t border-bg-border/20 rounded-t-2xl shadow-[0_-4px_20px_0_rgba(0,0,0,0.07)]"
+            : "fixed bottom-0 inset-x-0 z-50 bg-bg-deep/95 backdrop-blur border-t border-bg-border"
+        }
+      >
+        <div className="max-w-2xl mx-auto flex pb-safe" role="tablist">
           {TABS.filter((t) => !(readOnly && t.id === "absences")).map((t) => {
             const active = tab === t.id;
             return (
@@ -255,12 +327,19 @@ export default function App() {
                 aria-selected={active}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setTab(t.id)}
-                className={`relative flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors duration-150
-                  ${active ? "text-primary" : "text-text-dim hover:text-text-muted"}`}
+                className={
+                  design === "material"
+                    ? `relative flex-1 flex flex-col items-center gap-0.5 py-2.5 px-2 text-xs font-semibold transition-all duration-150 active:scale-90
+                       ${active
+                         ? "bg-primary text-on-primary rounded-xl mx-1 my-1 shadow-lg"
+                         : "text-text-dim hover:text-text-muted"}`
+                    : `relative flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors duration-150
+                       ${active ? "text-primary" : "text-text-dim hover:text-text-muted"}`
+                }
               >
                 <t.Icon className="w-6 h-6" />
                 <span>{t.label}</span>
-                {active && (
+                {active && design !== "material" && (
                   <span className="absolute bottom-0 w-8 h-0.5 bg-primary rounded-full" aria-hidden="true" />
                 )}
               </button>
