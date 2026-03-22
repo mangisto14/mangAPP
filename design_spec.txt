@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+
+<html class="light" dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-container": "#6bff8f",
+                        "tertiary-fixed": "#c9e6ff",
+                        "surface-container": "#eceef0",
+                        "error": "#ba1a1a",
+                        "tertiary": "#001624",
+                        "on-secondary-fixed": "#002109",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "on-error": "#ffffff",
+                        "surface-container-high": "#e6e8ea",
+                        "on-tertiary-container": "#0099d9",
+                        "on-error-container": "#93000a",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "outline": "#75777d",
+                        "tertiary-fixed-dim": "#89ceff",
+                        "on-secondary-container": "#007432",
+                        "on-surface": "#191c1e",
+                        "on-secondary": "#ffffff",
+                        "background": "#f7f9fb",
+                        "on-surface-variant": "#45474c",
+                        "on-background": "#191c1e",
+                        "surface-dim": "#d8dadc",
+                        "primary-fixed": "#d8e3fb",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#005321",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-tint": "#545f73",
+                        "primary": "#091426",
+                        "inverse-surface": "#2d3133",
+                        "secondary": "#006e2f",
+                        "primary-container": "#1e293b",
+                        "surface": "#f7f9fb",
+                        "on-primary-fixed": "#111c2d",
+                        "inverse-primary": "#bcc7de",
+                        "surface-variant": "#e0e3e5",
+                        "tertiary-container": "#002c42",
+                        "secondary-fixed-dim": "#4ae176",
+                        "outline-variant": "#c5c6cd",
+                        "secondary-fixed": "#6bff8f",
+                        "on-tertiary-fixed": "#001e2f",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-bright": "#f7f9fb",
+                        "on-tertiary-fixed-variant": "#004c6e",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-primary-container": "#8590a6",
+                        "surface-container-highest": "#e0e3e5"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200/15 dark:border-slate-800/15 shadow-sm dark:shadow-none">
+<div class="flex flex-row-reverse justify-between items-center px-6 py-3 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container border border-outline-variant/20">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="User profile avatar icon in circle" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLZWuk6HtiAnMo8LyVal7YUqJQ-bzCZ9J2cu01mIPcZBrkO_iWeSG5dzw_slvH4ve0HU4Wj_89njSy_sFMmu5dkgldFQOjeECJZlF-mgSzJDCsI0MkMKNOH4l3JlxjSkRLWkpQYDDp44YbYZ4L-RI8WyqQCOR0hNgzQRNH8F7kc2r8_4jK1t0iuxa6uyf1eq-LfkQtUMSU9pgDkI_hgkrnKo46fVTinYVk1ueBowxa7vGTbIDFEtdDtT7VwhdtA55bhS9E7_0URdE"/>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-inter text-right font-semibold text-lg text-slate-800 dark:text-slate-100">מצבת כוח - סבב שיבוץ</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="hidden md:block h-6 w-px bg-slate-200 dark:bg-slate-800 mx-2"></div>
+<h1 class="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">BRAND ALPHA</h1>
+</div>
+</div>
+</header>
+<main class="pt-20 px-4 md:px-8 max-w-7xl mx-auto">
+<!-- Quick Stats Bento -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+<div class="bg-surface-container-lowest p-5 rounded-xl flex flex-col gap-2">
+<span class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider">סה"כ מאויש</span>
+<div class="flex items-end gap-2">
+<span class="text-3xl font-bold text-primary">142</span>
+<span class="text-secondary text-sm font-medium mb-1">+12%</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-xl flex flex-col gap-2">
+<span class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider">חוסר בכ"א</span>
+<div class="flex items-end gap-2">
+<span class="text-3xl font-bold text-primary">8</span>
+<span class="text-error text-sm font-medium mb-1">-2</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-xl flex flex-col gap-2">
+<span class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider">משימות פתוחות</span>
+<div class="flex items-end gap-2">
+<span class="text-3xl font-bold text-primary">24</span>
+<span class="text-on-tertiary-container text-sm font-medium mb-1">פעיל</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-5 rounded-xl flex flex-col gap-2 border-r-4 border-secondary">
+<span class="text-on-surface-variant text-xs font-semibold uppercase tracking-wider">סטטוס סבב</span>
+<div class="flex items-center gap-2">
+<span class="text-xl font-bold text-secondary">שיבוץ סגור</span>
+</div>
+</div>
+</div>
+<!-- Filters Bar -->
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6 sticky top-[72px] z-40 bg-background/80 backdrop-blur-md py-2">
+<div class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+<button class="px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-semibold transition-all shadow-lg shadow-primary/10">הכל</button>
+<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-sm font-medium hover:bg-surface-variant transition-colors whitespace-nowrap">20/03 - 22/03</button>
+<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-sm font-medium hover:bg-surface-variant transition-colors whitespace-nowrap">23/03 - 25/03</button>
+<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full text-sm font-medium hover:bg-surface-variant transition-colors whitespace-nowrap">26/03 - 28/03</button>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 bg-surface-container-lowest rounded-lg border border-outline-variant/10 text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span>
+<span>שיבוץ חדש</span>
+</button>
+</div>
+</div>
+<!-- Roster Table Module -->
+<div class="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden border border-outline-variant/5">
+<div class="overflow-x-auto overflow-y-auto max-h-[618px]">
+<table class="w-full text-right border-collapse min-w-[1000px]">
+<thead class="sticky top-0 z-30 bg-white/95 backdrop-blur-sm shadow-sm">
+<tr>
+<th class="p-4 bg-surface-container-low sticky right-0 z-40 w-48 border-l border-outline-variant/10">
+<span class="text-xs font-extrabold text-outline uppercase tracking-widest">תפקיד / יחידה</span>
+</th>
+<th class="p-4 border-b border-outline-variant/10">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-primary">יום א'</span>
+<span class="text-[10px] text-on-surface-variant">20/03 - 22/03</span>
+</div>
+</th>
+<th class="p-4 border-b border-outline-variant/10">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-primary">יום ב'</span>
+<span class="text-[10px] text-on-surface-variant">23/03 - 25/03</span>
+</div>
+</th>
+<th class="p-4 border-b border-outline-variant/10">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-primary">יום ג'</span>
+<span class="text-[10px] text-on-surface-variant">26/03 - 28/03</span>
+</div>
+</th>
+<th class="p-4 border-b border-outline-variant/10">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-primary">יום ד'</span>
+<span class="text-[10px] text-on-surface-variant">29/03 - 31/03</span>
+</div>
+</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Category: Officers -->
+<tr class="bg-surface-container-low/30">
+<td class="px-4 py-2 sticky right-0 z-20" colspan="5">
+<span class="text-xs font-bold text-on-primary-fixed-variant uppercase tracking-tighter">קצינים</span>
+</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="p-4 sticky right-0 z-20 bg-white group-hover:bg-slate-50 font-medium text-primary text-sm border-l border-outline-variant/10">ק. תורן</td>
+<td class="p-2">
+<div class="bg-primary/5 border border-primary/10 rounded-lg p-3 group-hover:shadow-sm transition-all">
+<p class="text-xs font-bold text-primary">זיו יוספי</p>
+<p class="text-[10px] text-on-primary-container">משמרת בוקר</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-secondary/5 border border-secondary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-secondary">בועז רפאלי</p>
+<p class="text-[10px] text-on-secondary-container">משמרת כוננות</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-primary">איתי לוי</p>
+<p class="text-[10px] text-on-primary-container">משמרת בוקר</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-tertiary-fixed/30 border border-tertiary-fixed-dim/20 rounded-lg p-3">
+<p class="text-xs font-bold text-tertiary">גיא חסון</p>
+<p class="text-[10px] text-on-tertiary-fixed-variant">לילה</p>
+</div>
+</td>
+</tr>
+<!-- Category: Commanders -->
+<tr class="bg-surface-container-low/30">
+<td class="px-4 py-2 sticky right-0 z-20" colspan="5">
+<span class="text-xs font-bold text-on-primary-fixed-variant uppercase tracking-tighter">מפקדים</span>
+</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="p-4 sticky right-0 z-20 bg-white group-hover:bg-slate-50 font-medium text-primary text-sm border-l border-outline-variant/10">מפקד צוות א'</td>
+<td class="p-2">
+<div class="bg-secondary/5 border border-secondary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-secondary">דנה כהן</p>
+<p class="text-[10px] text-on-secondary-container">כוננות</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-primary">יוסי חדד</p>
+<p class="text-[10px] text-on-primary-container">בוקר</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-error-container/20 border border-error/10 rounded-lg p-3">
+<p class="text-xs font-bold text-error">חוסר מאויש</p>
+<p class="text-[10px] text-on-error-container">נדרש שיבוץ</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-primary">אורן זיו</p>
+<p class="text-[10px] text-on-primary-container">בוקר</p>
+</div>
+</td>
+</tr>
+<!-- Category: Inspectors -->
+<tr class="bg-surface-container-low/30">
+<td class="px-4 py-2 sticky right-0 z-20" colspan="5">
+<span class="text-xs font-bold text-on-primary-fixed-variant uppercase tracking-tighter">פקחים</span>
+</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="p-4 sticky right-0 z-20 bg-white group-hover:bg-slate-50 font-medium text-primary text-sm border-l border-outline-variant/10">פיקוח שטח</td>
+<td class="p-2">
+<div class="flex flex-col gap-1">
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">אבי רון</p>
+</div>
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">רון ארד</p>
+</div>
+</div>
+</td>
+<td class="p-2">
+<div class="flex flex-col gap-1">
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">שי גל</p>
+</div>
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">מתן בן</p>
+</div>
+</div>
+</td>
+<td class="p-2">
+<div class="flex flex-col gap-1">
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">תומר סלע</p>
+</div>
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">דוד פלד</p>
+</div>
+</div>
+</td>
+<td class="p-2">
+<div class="flex flex-col gap-1">
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">גלעד כץ</p>
+</div>
+<div class="bg-surface-container-low border border-outline-variant/10 rounded-lg p-2">
+<p class="text-xs font-bold text-on-surface">ניר הוד</p>
+</div>
+</div>
+</td>
+</tr>
+<!-- Category: Drivers -->
+<tr class="bg-surface-container-low/30">
+<td class="px-4 py-2 sticky right-0 z-20" colspan="5">
+<span class="text-xs font-bold text-on-primary-fixed-variant uppercase tracking-tighter">נהגים</span>
+</td>
+</tr>
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="p-4 sticky right-0 z-20 bg-white group-hover:bg-slate-50 font-medium text-primary text-sm border-l border-outline-variant/10">נהג כונן</td>
+<td class="p-2">
+<div class="bg-tertiary-fixed/30 border border-tertiary-fixed-dim/20 rounded-lg p-3">
+<p class="text-xs font-bold text-tertiary">עופר לוי</p>
+<p class="text-[10px] text-on-tertiary-fixed-variant">לילה</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-primary">מיכאל שרון</p>
+<p class="text-[10px] text-on-primary-container">בוקר</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-primary/5 border border-primary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-primary">אדם סילבר</p>
+<p class="text-[10px] text-on-primary-container">בוקר</p>
+</div>
+</td>
+<td class="p-2">
+<div class="bg-secondary/5 border border-secondary/10 rounded-lg p-3">
+<p class="text-xs font-bold text-secondary">יונתן כץ</p>
+<p class="text-[10px] text-on-secondary-container">כוננות</p>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex flex-row-reverse justify-around items-center px-4 pb-6 pt-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl z-50 rounded-t-2xl shadow-[0_-4px_20px_0_rgba(0,0,0,0.05)]">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 active:scale-90 transition-transform hover:text-slate-700 dark:hover:text-slate-300" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_view_month">calendar_view_month</span>
+<span class="font-inter text-[11px] font-medium leading-tight mt-1">לוח זמנים</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl px-5 py-2 transition-all active:scale-90 shadow-lg shadow-slate-900/10" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-inter text-[11px] font-medium leading-tight mt-1">צוות</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 active:scale-90 transition-transform hover:text-slate-700 dark:hover:text-slate-300" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-inter text-[11px] font-medium leading-tight mt-1">דוחוות</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-5 py-2 active:scale-90 transition-transform hover:text-slate-700 dark:hover:text-slate-300" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-inter text-[11px] font-medium leading-tight mt-1">הגדרות</span>
+</a>
+</nav>
+</body></html>
