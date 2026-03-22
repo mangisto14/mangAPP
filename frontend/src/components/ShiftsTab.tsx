@@ -7,6 +7,94 @@ import EditShiftModal from "./EditShiftModal";
 import { SkeletonShiftCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
 
+const SWIPE_THRESHOLD = 72;
+
+function SwipeableRow({
+  shift,
+  onEdit,
+  onDelete,
+  pendingDelete,
+}: {
+  shift: Shift;
+  onEdit: () => void;
+  onDelete: () => void;
+  pendingDelete: boolean;
+}) {
+  const startXRef = useRef(0);
+  const [offset, setOffset] = useState(0);
+  const [swiped, setSwiped] = useState(false);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    const dx = e.touches[0].clientX - startXRef.current;
+    if (dx < 0) setOffset(Math.max(dx, -SWIPE_THRESHOLD));
+    else if (swiped) setOffset(Math.min(0, -SWIPE_THRESHOLD + dx));
+  };
+
+  const onTouchEnd = () => {
+    if (offset <= -SWIPE_THRESHOLD + 4) {
+      setOffset(-SWIPE_THRESHOLD);
+      setSwiped(true);
+    } else {
+      setOffset(0);
+      setSwiped(false);
+    }
+  };
+
+  const close = () => { setOffset(0); setSwiped(false); };
+
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      {/* Delete zone behind the card */}
+      <div
+        className="absolute inset-y-0 left-0 flex items-center justify-center bg-danger"
+        style={{ width: SWIPE_THRESHOLD, borderRadius: "inherit" }}
+      >
+        <button
+          onClick={() => { close(); onDelete(); }}
+          disabled={pendingDelete}
+          className="flex items-center justify-center w-full h-full text-white"
+          aria-label="מחיקה"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+
+      {/* Card — slides right→left on swipe */}
+      <div
+        className={`card flex items-center justify-between gap-3 ${shift.is_past ? "opacity-60" : ""}`}
+        style={{
+          transform: `translateX(${offset}px)`,
+          transition: offset === 0 || offset === -SWIPE_THRESHOLD ? "transform 0.2s ease" : "none",
+          touchAction: "pan-y",
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={swiped ? close : undefined}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${shift.is_past ? "bg-muted" : "bg-primary-light"}`} />
+          <span className="text-sm font-bold text-text-muted tabular-nums">
+            {formatTime(shift.start_time)}–{formatTime(shift.end_time)}
+          </span>
+          <span className="text-sm text-text truncate">{shift.names.join(", ")}</span>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="flex-shrink-0 text-text-dim hover:text-primary transition-colors p-1 rounded-lg hover:bg-primary/10"
+          aria-label="עריכה"
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface PendingDelete {
   id: number;
   label: string;
@@ -352,49 +440,28 @@ export default function ShiftsTab() {
               </div>
 
               {/* Shift rows */}
-              {!isCollapsed && dayShifts.map((s) => (
-                <div
-                  key={s.id}
-                  className={`card flex items-center justify-between gap-3 transition-all hover:border-bg-border/60
-                    ${s.is_past ? "opacity-60" : ""}`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                        s.is_past ? "bg-muted" : "bg-primary-light"
-                      }`}
-                    />
+              {!isCollapsed && dayShifts.map((s) =>
+                readOnly ? (
+                  <div
+                    key={s.id}
+                    className={`card flex items-center gap-3 ${s.is_past ? "opacity-60" : ""}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.is_past ? "bg-muted" : "bg-primary-light"}`} />
                     <span className="text-sm font-bold text-text-muted tabular-nums">
                       {formatTime(s.start_time)}–{formatTime(s.end_time)}
                     </span>
-                    <span className="text-sm text-text truncate">
-                      {s.names.join(", ")}
-                    </span>
+                    <span className="text-sm text-text truncate">{s.names.join(", ")}</span>
                   </div>
-                  {!readOnly && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => setEditingShift(s)}
-                        className="text-text-dim hover:text-primary transition-colors p-1 rounded-lg hover:bg-primary/10"
-                        title="עריכה"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s)}
-                        disabled={pendingDelete?.id === s.id}
-                        className={`transition-colors p-1 rounded-lg hover:bg-danger/10 ${
-                          pendingDelete?.id === s.id
-                            ? "text-danger opacity-40 cursor-not-allowed"
-                            : "text-text-dim hover:text-danger"
-                        }`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ) : (
+                  <SwipeableRow
+                    key={s.id}
+                    shift={s}
+                    onEdit={() => setEditingShift(s)}
+                    onDelete={() => handleDelete(s)}
+                    pendingDelete={pendingDelete?.id === s.id}
+                  />
+                )
+              )}
             </div>
           );
         })}
