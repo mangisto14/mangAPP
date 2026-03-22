@@ -201,37 +201,40 @@ export default function EditShiftModal({ shift, onClose, onSaved }: Props) {
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-5">
-          {/* Date */}
-          <div>
-            <label className="text-xs text-text-dim mb-1 block">תאריך</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="input text-sm w-full"
-            />
-          </div>
-
-          {/* Times */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          {/* Date + Start time */}
+          <div className="grid gap-2 overflow-hidden" style={{ gridTemplateColumns: "3fr 2fr" }}>
+            <div className="min-w-0 overflow-hidden">
+              <label className="text-xs text-text-dim mb-1 block">תאריך</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="input text-sm w-full py-1.5 min-w-0"
+              />
+            </div>
+            <div className="min-w-0 overflow-hidden">
               <label className="text-xs text-text-dim mb-1 block">שעת התחלה</label>
               <input
                 type="time"
                 value={startTime}
                 step={1800}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="input text-sm w-full"
+                className="input text-sm w-full py-1.5 min-w-0"
               />
             </div>
-            <div>
+          </div>
+
+          {/* End time */}
+          <div className="grid gap-2 overflow-hidden" style={{ gridTemplateColumns: "3fr 2fr" }}>
+            <div />
+            <div className="min-w-0 overflow-hidden">
               <label className="text-xs text-text-dim mb-1 block">שעת סיום</label>
               <input
                 type="time"
                 value={endTime}
                 step={1800}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="input text-sm w-full"
+                className="input text-sm w-full py-1.5 min-w-0"
               />
             </div>
           </div>
