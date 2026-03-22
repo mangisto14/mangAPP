@@ -993,6 +993,16 @@ def delete_shift(shift_id: int):
     return {"ok": True}
 
 
+@app.put("/api/shifts/{shift_id}")
+def update_shift(shift_id: int, body: ShiftItem):
+    with get_conn() as conn:
+        conn.execute(
+            _q("UPDATE shifts SET start_time=?, end_time=?, names=? WHERE id=?"),
+            (body.start_time, body.end_time, ",".join(body.names), shift_id),
+        )
+    return {"ok": True}
+
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/api/stats")
 def get_stats():

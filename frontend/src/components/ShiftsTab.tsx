@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Trash2, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
+import { Trash2, Pencil, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
 import AddShiftTab from "./AddShiftTab";
+import EditShiftModal from "./EditShiftModal";
 import { SkeletonShiftCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
 
@@ -59,6 +60,7 @@ export default function ShiftsTab() {
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const readOnly = useReadOnly();
 
   /** Derive the backend filter + date range from UI state */
@@ -185,6 +187,14 @@ export default function ShiftsTab() {
 
   return (
     <div className="fade-in space-y-4">
+      {/* Edit modal */}
+      {editingShift && (
+        <EditShiftModal
+          shift={editingShift}
+          onClose={() => setEditingShift(null)}
+          onSaved={() => { setEditingShift(null); load(); }}
+        />
+      )}
       {/* Undo toast */}
       {pendingDelete && (
         <div className="fixed bottom-24 right-4 left-4 max-w-sm mx-auto z-50 slide-in">
@@ -362,17 +372,26 @@ export default function ShiftsTab() {
                     </span>
                   </div>
                   {!readOnly && (
-                    <button
-                      onClick={() => handleDelete(s)}
-                      disabled={pendingDelete?.id === s.id}
-                      className={`flex-shrink-0 transition-colors p-1 rounded-lg hover:bg-danger/10 ${
-                        pendingDelete?.id === s.id
-                          ? "text-danger opacity-40 cursor-not-allowed"
-                          : "text-text-dim hover:text-danger"
-                      }`}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setEditingShift(s)}
+                        className="text-text-dim hover:text-primary transition-colors p-1 rounded-lg hover:bg-primary/10"
+                        title="עריכה"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(s)}
+                        disabled={pendingDelete?.id === s.id}
+                        className={`transition-colors p-1 rounded-lg hover:bg-danger/10 ${
+                          pendingDelete?.id === s.id
+                            ? "text-danger opacity-40 cursor-not-allowed"
+                            : "text-text-dim hover:text-danger"
+                        }`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

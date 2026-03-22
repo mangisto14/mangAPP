@@ -55,6 +55,11 @@ export const addShifts = (shifts: StagedShift[]) =>
   });
 export const deleteShift = (id: number) =>
   req<{ ok: boolean }>(`/shifts/${id}`, { method: "DELETE" });
+export const updateShift = (id: number, start_time: string, end_time: string, names: string[]) =>
+  req<{ ok: boolean }>(`/shifts/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ start_time, end_time, names }),
+  });
 
 // Stats & Suggest
 export const getStats = () => req<Stats>("/stats");
