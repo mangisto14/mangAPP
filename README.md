@@ -120,13 +120,17 @@ Important:
 ```powershell
 cd "c:\Users\repo\guard shift\mangAPP\frontend"
 npm install
-$env:VITE_API_URL="http://127.0.0.1:8000"
 npm run dev
 ```
 
 Frontend URL (usually):
 
 - `http://127.0.0.1:5173`
+
+Notes:
+
+- For local development, Vite proxies `/api` to `http://localhost:8000` automatically.
+- `VITE_API_URL` is only needed when pointing the frontend to a non-local backend.
 
 ### 3) Optional production build test
 

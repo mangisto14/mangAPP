@@ -107,7 +107,7 @@ function SwipeableRow({
       {/* Card */}
       <div
         ref={cardRef}
-        className={`card flex items-center justify-between gap-3 ${shift.is_past ? "opacity-60" : ""}`}
+        className="card flex items-center justify-between gap-3"
         style={{
           transform: `translateX(${offset}px)`,
           transition: offset === 0 || offset === SWIPE_THRESHOLD ? "transform 0.2s ease" : "none",
@@ -513,7 +513,7 @@ export default function ShiftsTab() {
                 readOnly ? (
                   <div
                     key={s.id}
-                    className={`card flex items-center gap-3 ${s.is_past ? "opacity-60" : ""}`}
+                    className="card flex items-center gap-3"
                   >
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.is_past ? "bg-muted" : "bg-primary-light"}`} />
                     <span className="text-sm font-bold text-text-muted tabular-nums">

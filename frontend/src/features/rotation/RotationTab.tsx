@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown } from "lucide-react";
+import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown, Copy } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import {
   getRotation,
@@ -220,6 +220,125 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
   );
 }
 
+interface DuplicatePeriodModalProps {
+  config: RotationConfig;
+  sourcePeriod: Period;
+  periods: Period[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function DuplicatePeriodModal({ config, sourcePeriod, periods, onClose, onSaved }: DuplicatePeriodModalProps) {
+  const targetPeriods = periods.filter((p) => p.slotIndex !== sourcePeriod.slotIndex);
+  const [selectedTargets, setSelectedTargets] = useState<number[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const toggleTarget = (slotIndex: number) => {
+    setSelectedTargets((prev) =>
+      prev.includes(slotIndex) ? prev.filter((n) => n !== slotIndex) : [...prev, slotIndex]
+    );
+  };
+
+  const handleSave = async () => {
+    if (selectedTargets.length === 0) {
+      setError("יש לבחור לפחות תקופת יעד אחת");
+      return;
+    }
+
+    const targetLabels = targetPeriods
+      .filter((p) => selectedTargets.includes(p.slotIndex))
+      .map((p) => `${p.slotIndex + 1} (${p.periodLabel})`)
+      .join(", ");
+
+    const ok = window.confirm(
+      `לשכפל את תקופה ${sourcePeriod.slotIndex + 1} (${sourcePeriod.periodLabel}) לתקופות: ${targetLabels}?`
+    );
+    if (!ok) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      for (const role of config.roles) {
+        const needed = Math.max(
+          9,
+          sourcePeriod.slotIndex + 1,
+          ...selectedTargets.map((slot) => slot + 1)
+        );
+        const newSlots = Array.from({ length: needed }, (_, i) => role.slots[i] ?? []);
+        const sourceNames = role.slots[sourcePeriod.slotIndex] ?? [];
+        for (const targetSlot of selectedTargets) {
+          newSlots[targetSlot] = [...sourceNames];
+        }
+        await updateRotationSlots(role.id, newSlots);
+      }
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
+      <div
+        className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in
+                   max-w-2xl mx-auto max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-5 border-b border-bg-border shrink-0">
+          <h2 className="font-bold text-text text-lg">
+            שכפול תקופה {sourcePeriod.slotIndex + 1} · {sourcePeriod.periodLabel}
+          </h2>
+          <button onClick={onClose} className="text-text-dim hover:text-text text-xl px-2">✕</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          <div className="text-xs text-text-dim bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
+            יועתקו רק השיבוצים לתקופות היעד. טווחי התאריכים לא ישתנו.
+          </div>
+
+          <div className="space-y-2">
+            {targetPeriods.map((p) => {
+              const checked = selectedTargets.includes(p.slotIndex);
+              return (
+                <label
+                  key={p.slotIndex}
+                  className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 cursor-pointer transition-all
+                    ${checked ? "border-primary/40 bg-primary/10" : "border-bg-border bg-bg-base/30 hover:bg-bg-base/60"}`}
+                >
+                  <div className="text-sm text-text">
+                    תקופה {p.slotIndex + 1} · {p.label} · {p.periodLabel}
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleTarget(p.slotIndex)}
+                    className="accent-primary w-4 h-4"
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          {error && (
+            <div className="text-danger text-sm bg-danger/10 border border-danger/30 rounded-xl p-3">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 border-t border-bg-border shrink-0">
+          <button onClick={handleSave} disabled={saving} className="btn-primary w-full">
+            {saving ? "משכפל..." : "שכפל לתקופות שנבחרו"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── exportToExcel ─────────────────────────────────────────────────────────────
 
 // Excel fill colors per period type (א-ג / ג-ה / ו-א)
@@ -405,11 +524,13 @@ export default function RotationTab() {
   const [extraWeeks, setExtraWeeks] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [syncingSchedule, setSyncingSchedule] = useState(false);
+  const [addingWeek, setAddingWeek] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [guardNames, setGuardNames] = useState<string[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
   const [editRangePeriod, setEditRangePeriod] = useState<Period | null>(null);
+  const [duplicateSourcePeriod, setDuplicateSourcePeriod] = useState<Period | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const activePeriodRef = useRef<HTMLTableCellElement>(null);
   const readOnly = useReadOnly();
@@ -452,6 +573,27 @@ export default function RotationTab() {
       alert((e as Error).message);
     } finally {
       setSyncingSchedule(false);
+    }
+  };
+
+  const handleAddWeek = async () => {
+    if (!config) return;
+    setAddingWeek(true);
+    try {
+      const maxRoleSlots = config.roles.reduce((max, role) => Math.max(max, role.slots.length), 0);
+      const currentPeriods = Math.max(9, config.periods?.length ?? 0, maxRoleSlots);
+      const nextPeriods = currentPeriods + 3;
+
+      for (const role of config.roles) {
+        const newSlots = Array.from({ length: nextPeriods }, (_, i) => role.slots[i] ?? []);
+        await updateRotationSlots(role.id, newSlots);
+      }
+
+      await load();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setAddingWeek(false);
     }
   };
 
@@ -515,11 +657,12 @@ export default function RotationTab() {
                   {!readOnly && (
                     <>
                       <button
-                        onClick={() => { setShowActionsMenu(false); setExtraWeeks((n) => n + 1); }}
+                        onClick={() => { setShowActionsMenu(false); handleAddWeek(); }}
+                        disabled={addingWeek}
                         className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
-                                   hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
+                                   hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
                       >
-                        הוסף שבוע
+                        {addingWeek ? "מוסיף..." : "הוסף שבוע"}
                         <PlusCircle size={13} />
                       </button>
                       <button
@@ -672,6 +815,13 @@ export default function RotationTab() {
                         >
                           <Pencil size={10} />
                         </button>
+                        <button
+                          onClick={() => setDuplicateSourcePeriod(p)}
+                          className="p-0.5 text-text-dim/40 hover:text-primary transition-colors"
+                          title="שכפל תקופה"
+                        >
+                          <Copy size={10} />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -754,6 +904,16 @@ export default function RotationTab() {
           period={editRangePeriod}
           onClose={() => setEditRangePeriod(null)}
           onSaved={() => { setEditRangePeriod(null); load(); }}
+        />
+      )}
+
+      {duplicateSourcePeriod && (
+        <DuplicatePeriodModal
+          config={config}
+          sourcePeriod={duplicateSourcePeriod}
+          periods={periods}
+          onClose={() => setDuplicateSourcePeriod(null)}
+          onSaved={() => { setDuplicateSourcePeriod(null); load(); }}
         />
       )}
 
