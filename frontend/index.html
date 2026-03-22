@@ -25,13 +25,13 @@
     />
   </head>
   <body>
-    <!-- prevent flash of wrong theme on load -->
+    <!-- prevent flash of wrong design on load -->
     <script>
       (function(){
-        var t=localStorage.getItem("theme")||"dark";
-        document.documentElement.setAttribute("data-theme",t);
-        var d=localStorage.getItem("design")||"classic";
-        document.documentElement.setAttribute("data-design",d);
+        var d = localStorage.getItem("design") || "dark";
+        var html = document.documentElement;
+        html.setAttribute("data-design", d);
+        if (d === "dark" || d === "modern") html.setAttribute("data-dark", "");
       })();
     </script>
     <div id="root"></div>

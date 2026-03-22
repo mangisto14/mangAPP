@@ -1,18 +1,25 @@
 import { useEffect, useState } from "react";
 
-export type DesignVariant = "classic" | "material";
+export type DesignPreset = "dark" | "light" | "modern";
+
+const DARK_PRESETS: DesignPreset[] = ["dark", "modern"];
 
 export function useDesign() {
-  const [design, setDesign] = useState<DesignVariant>(() => {
-    return (localStorage.getItem("design") as DesignVariant) || "classic";
+  const [design, setDesign] = useState<DesignPreset>(() => {
+    return (localStorage.getItem("design") as DesignPreset) || "dark";
   });
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-design", design);
+    const html = document.documentElement;
+    html.setAttribute("data-design", design);
+    // data-dark drives Tailwind's darkMode selector for existing dark: classes
+    if (DARK_PRESETS.includes(design)) {
+      html.setAttribute("data-dark", "");
+    } else {
+      html.removeAttribute("data-dark");
+    }
     localStorage.setItem("design", design);
   }, [design]);
 
-  const setVariant = (v: DesignVariant) => setDesign(v);
-
-  return { design, setVariant };
+  return { design, setDesign };
 }

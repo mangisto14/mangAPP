@@ -1,11 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
-  darkMode: ["selector", "[data-theme='dark']"],
+  // dark: classes apply when data-design is "dark" (default :root) or "modern"
+  // We use data-dark attribute set by useDesign hook
+  darkMode: ["selector", "[data-dark]"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Assistant", "sans-serif"],
+        sans:  ["Assistant", "sans-serif"],
+        inter: ["Inter", "Assistant", "sans-serif"],
       },
       colors: {
         bg: {
@@ -21,11 +24,11 @@ export default {
           light:   "rgb(var(--primary-light-rgb) / <alpha-value>)",
         },
         secondary: "rgb(var(--secondary-rgb) / <alpha-value>)",
+        accent:    "rgb(var(--accent-rgb)    / <alpha-value>)",
         "on-primary": "#ffffff",
         success: "#22c55e",
         warning: "#f59e0b",
         danger:  "#ef4444",
-        muted:   "#64748b",
         text: {
           DEFAULT: "rgb(var(--text-rgb)       / <alpha-value>)",
           muted:   "rgb(var(--text-muted-rgb) / <alpha-value>)",

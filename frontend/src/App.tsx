@@ -7,8 +7,7 @@ import AbsencesTab from "./features/absences/AbsencesTab";
 import RotationTab from "./features/rotation/RotationTab";
 import { getSettings, updateSettings } from "./features/absences/api";
 import type { AlertThreshold } from "./features/absences/types";
-import { useTheme } from "./hooks/useTheme";
-import { useDesign } from "./hooks/useDesign";
+import { useDesign, type DesignPreset } from "./hooks/useDesign";
 import { useFontSize } from "./hooks/useFontSize";
 import { ReadOnlyContext } from "./hooks/useReadOnly";
 import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
@@ -30,6 +29,94 @@ const LEVEL_LABELS: Record<AlertThreshold["level"], string> = {
 };
 
 const LEVEL_OPTIONS: AlertThreshold["level"][] = ["warning", "danger", "critical"];
+
+// ── Design presets metadata ───────────────────────────────────────────────────
+const DESIGN_PRESETS: { id: DesignPreset; label: string; swatches: string[]; desc: string }[] = [
+  {
+    id: "dark",
+    label: "כהה",
+    desc: "כחול לילה",
+    swatches: ["#0d1520", "#2563eb", "#162033"],
+  },
+  {
+    id: "light",
+    label: "בהיר",
+    desc: "לבן נקי",
+    swatches: ["#f8fafc", "#2563eb", "#e2e8f0"],
+  },
+  {
+    id: "modern",
+    label: "מודרני",
+    desc: "סגול ניאון",
+    swatches: ["#0a0818", "#8b5cf6", "#06b6d4"],
+  },
+];
+
+// ── Design Picker Panel ───────────────────────────────────────────────────────
+function DesignPicker({
+  current,
+  onChange,
+  onClose,
+}: {
+  current: DesignPreset;
+  onChange: (d: DesignPreset) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[60]"
+      onClick={onClose}
+      aria-hidden="true"
+    >
+      <div
+        role="dialog"
+        aria-label="בחר עיצוב"
+        className="absolute top-[64px] left-4 bg-bg-card border border-bg-border rounded-2xl p-4 shadow-2xl w-64 scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-xs font-bold text-text-dim uppercase tracking-widest mb-3 text-right">
+          גרסאות עיצוב
+        </p>
+        <div className="flex flex-col gap-2">
+          {DESIGN_PRESETS.map((preset) => {
+            const active = current === preset.id;
+            return (
+              <button
+                key={preset.id}
+                onClick={() => { onChange(preset.id); onClose(); }}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-right transition-all duration-150 w-full
+                  ${active
+                    ? "bg-primary/10 border border-primary/30 text-text"
+                    : "hover:bg-bg-hover text-text-muted hover:text-text border border-transparent"
+                  }`}
+              >
+                {/* Swatches */}
+                <div className="flex gap-1 shrink-0">
+                  {preset.swatches.map((c, i) => (
+                    <div
+                      key={i}
+                      className="w-4 h-4 rounded-full border border-white/10"
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+                {/* Labels */}
+                <div className="flex-1 text-right">
+                  <div className="text-sm font-semibold leading-none">{preset.label}</div>
+                  <div className="text-[10px] text-text-dim mt-0.5">{preset.desc}</div>
+                </div>
+                {/* Active indicator */}
+                {active && (
+                  <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Settings Modal ────────────────────────────────────────────────────────────
 function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -129,8 +216,8 @@ export default function App() {
   const [pinReady, setPinReady] = useState<boolean | null>(null);
   const [readOnly, setReadOnly] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const { theme, toggle: toggleTheme } = useTheme();
-  const { design, setVariant: setDesign } = useDesign();
+  const [showDesignPicker, setShowDesignPicker] = useState(false);
+  const { design, setDesign } = useDesign();
   const { increase, decrease, canIncrease, canDecrease } = useFontSize();
 
   // PWA install prompt
@@ -176,102 +263,72 @@ export default function App() {
     <PinScreen onSuccess={(mode) => { setReadOnly(mode === "viewer"); setPinReady(true); }} />
   );
 
+  const isModern = design === "modern";
+
   return (
     <ReadOnlyContext.Provider value={readOnly}>
     <div className="min-h-screen pb-20">
-      {/* Header */}
-      {design === "material" ? (
-        /* ── Material Design header (per design_spec) ── */
-        <header className="sticky top-0 z-50 bg-bg-card/90 backdrop-blur-xl border-b border-bg-border/30 shadow-sm">
-          <div className="flex flex-row-reverse justify-between items-center px-4 py-3 max-w-7xl mx-auto">
-            {/* Right: title */}
-            <div className="flex flex-col items-end">
-              <span className="font-semibold text-lg text-text">מצבת כוח</span>
-              <span className="text-xs text-text-dim">ניהול מצבת כוח</span>
-            </div>
-            {/* Left: actions */}
-            <div className="flex items-center gap-2">
-              {/* Design switcher */}
+
+      {/* ── Header ── */}
+      <header className={`sticky top-0 z-50 border-b transition-colors duration-300
+        ${isModern
+          ? "bg-bg-deep/80 backdrop-blur-xl border-bg-border/40 shadow-[0_1px_20px_rgb(139,92,246,0.12)]"
+          : "bg-bg-deep/90 backdrop-blur border-bg-border"
+        }`}
+      >
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className={`text-lg font-bold text-text ${isModern ? "font-inter" : ""}`}>
+              מצבת כוח
+            </h1>
+            <p className="text-xs text-text-dim">ניהול מצבת כוח</p>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Design picker trigger */}
+            <div className="relative">
               <button
-                onClick={() => setDesign("classic")}
-                className="px-3 py-1.5 text-xs font-semibold rounded-full border border-bg-border text-text-muted hover:bg-bg-hover transition-colors"
-                title="עבור לעיצוב קלאסי"
+                onClick={() => setShowDesignPicker((v) => !v)}
+                className={`p-2 rounded-xl transition-all duration-150 min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5
+                  ${showDesignPicker
+                    ? "bg-primary/15 text-primary"
+                    : "text-text-dim hover:text-text hover:bg-bg-base"
+                  }`}
+                title="שנה עיצוב"
+                aria-label="שנה עיצוב"
+                aria-expanded={showDesignPicker}
               >
-                קלאסי
-              </button>
-              {/* Theme toggle (material uses light by default but still supports toggle) */}
-              <button
-                onClick={toggleTheme}
-                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                title={theme === "dark" ? "מצב יום" : "מצב לילה"}
-                aria-label={theme === "dark" ? "עבור למצב יום" : "עבור למצב לילה"}
-              >
-                <span className="material-symbols-outlined text-[22px]">
-                  {theme === "dark" ? "light_mode" : "dark_mode"}
+                {/* Three colored dots as design icon */}
+                <span className="flex gap-0.5">
+                  <span className="w-2 h-2 rounded-full bg-primary inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-secondary inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-accent inline-block" />
                 </span>
               </button>
-              {/* Notifications */}
-              <button
-                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                aria-label="התראות"
-              >
-                <span className="material-symbols-outlined text-[22px]">notifications</span>
-              </button>
-              {/* Settings */}
-              {!readOnly && (
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                  title="הגדרות"
-                  aria-label="הגדרות"
-                >
-                  <span className="material-symbols-outlined text-[22px]">settings</span>
-                </button>
-              )}
             </div>
+
+            {/* Settings — hidden for viewers */}
+            {!readOnly && (
+              <button
+                onClick={() => setShowSettings(true)}
+                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                title="הגדרות"
+                aria-label="הגדרות"
+              >
+                ⚙️
+              </button>
+            )}
           </div>
-        </header>
-      ) : (
-        /* ── Classic header ── */
-        <header className="sticky top-0 z-50 bg-bg-deep/90 backdrop-blur border-b border-bg-border">
-          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-bold text-text">מצבת כוח</h1>
-              <p className="text-xs text-text-dim">ניהול מצבת כוח</p>
-            </div>
-            <div className="flex items-center gap-1">
-              {/* Design switcher */}
-              <button
-                onClick={() => setDesign("material")}
-                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
-                title="עבור לעיצוב Material"
-                aria-label="החלף עיצוב"
-              >
-                🎨
-              </button>
-              {/* Theme toggle */}
-              <button
-                onClick={toggleTheme}
-                className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors text-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
-                title={theme === "dark" ? "מצב יום" : "מצב לילה"}
-                aria-label={theme === "dark" ? "עבור למצב יום" : "עבור למצב לילה"}
-              >
-                {theme === "dark" ? "☀️" : "🌙"}
-              </button>
-              {/* Settings — hidden for viewers */}
-              {!readOnly && (
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                  title="הגדרות"
-                  aria-label="הגדרות"
-                >
-                  ⚙️
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
+        </div>
+      </header>
+
+      {/* Design Picker Panel */}
+      {showDesignPicker && (
+        <DesignPicker
+          current={design}
+          onChange={setDesign}
+          onClose={() => setShowDesignPicker(false)}
+        />
       )}
 
       {/* PWA install banner */}
@@ -308,16 +365,16 @@ export default function App() {
         {tab === "stats"    && <StatsTab />}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* ── Bottom Navigation ── */}
       <nav
         aria-label="ניווט ראשי"
-        className={
-          design === "material"
-            ? "fixed bottom-0 inset-x-0 z-50 bg-bg-card/85 backdrop-blur-2xl border-t border-bg-border/20 rounded-t-2xl shadow-[0_-4px_20px_0_rgba(0,0,0,0.07)]"
-            : "fixed bottom-0 inset-x-0 z-50 bg-bg-deep/95 backdrop-blur border-t border-bg-border"
-        }
+        className={`fixed bottom-0 inset-x-0 z-50 transition-colors duration-300
+          ${isModern
+            ? "bg-bg-deep/85 backdrop-blur-2xl border-t border-bg-border/30 shadow-[0_-4px_30px_rgb(139,92,246,0.1)]"
+            : "bg-bg-deep/95 backdrop-blur border-t border-bg-border"
+          }`}
       >
-        <div className="max-w-2xl mx-auto flex pb-safe" role="tablist">
+        <div className="max-w-2xl mx-auto flex" role="tablist">
           {TABS.filter((t) => !(readOnly && t.id === "absences")).map((t) => {
             const active = tab === t.id;
             return (
@@ -327,20 +384,20 @@ export default function App() {
                 aria-selected={active}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setTab(t.id)}
-                className={
-                  design === "material"
-                    ? `relative flex-1 flex flex-col items-center gap-0.5 py-2.5 px-2 text-xs font-semibold transition-all duration-150 active:scale-90
-                       ${active
-                         ? "bg-primary text-on-primary rounded-xl mx-1 my-1 shadow-lg"
-                         : "text-text-dim hover:text-text-muted"}`
-                    : `relative flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-colors duration-150
-                       ${active ? "text-primary" : "text-text-dim hover:text-text-muted"}`
-                }
+                className={`relative flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold transition-all duration-200
+                  ${active
+                    ? "text-primary"
+                    : "text-text-dim hover:text-text-muted"
+                  }`}
               >
-                <t.Icon className="w-6 h-6" />
+                <t.Icon className={`w-6 h-6 transition-transform duration-200 ${active ? "scale-110" : ""}`} />
                 <span>{t.label}</span>
-                {active && design !== "material" && (
-                  <span className="absolute bottom-0 w-8 h-0.5 bg-primary rounded-full" aria-hidden="true" />
+                {active && (
+                  <span
+                    className={`absolute bottom-0 w-8 h-0.5 rounded-full bg-primary
+                      ${isModern ? "shadow-[0_0_8px_rgb(139,92,246,0.8)]" : ""}`}
+                    aria-hidden="true"
+                  />
                 )}
               </button>
             );
