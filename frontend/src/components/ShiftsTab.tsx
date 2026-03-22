@@ -20,38 +20,78 @@ function SwipeableRow({
   onDelete: () => void;
   pendingDelete: boolean;
 }) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const directionRef = useRef<"h" | "v" | null>(null);
+  const swipedRef = useRef(false);
   const [offset, setOffset] = useState(0);
   const [swiped, setSwiped] = useState(false);
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    startXRef.current = e.touches[0].clientX;
+  const close = () => {
+    swipedRef.current = false;
+    setSwiped(false);
+    setOffset(0);
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    const dx = e.touches[0].clientX - startXRef.current;
-    if (dx < 0) setOffset(Math.max(dx, -SWIPE_THRESHOLD));
-    else if (swiped) setOffset(Math.min(0, -SWIPE_THRESHOLD + dx));
-  };
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
 
-  const onTouchEnd = () => {
-    if (offset <= -SWIPE_THRESHOLD + 4) {
-      setOffset(-SWIPE_THRESHOLD);
-      setSwiped(true);
-    } else {
-      setOffset(0);
-      setSwiped(false);
-    }
-  };
+    const onStart = (e: TouchEvent) => {
+      startXRef.current = e.touches[0].clientX;
+      startYRef.current = e.touches[0].clientY;
+      directionRef.current = null;
+    };
 
-  const close = () => { setOffset(0); setSwiped(false); };
+    const onMove = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - startXRef.current;
+      const dy = e.touches[0].clientY - startYRef.current;
+
+      // Determine direction on first significant movement
+      if (directionRef.current === null && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+        directionRef.current = Math.abs(dx) >= Math.abs(dy) ? "h" : "v";
+      }
+      if (directionRef.current !== "h") return;
+
+      e.preventDefault(); // blocks page scroll only for horizontal swipes
+      if (dx < 0) {
+        setOffset(Math.max(dx, -SWIPE_THRESHOLD));
+      } else if (swipedRef.current) {
+        setOffset(Math.min(0, -SWIPE_THRESHOLD + dx));
+      }
+    };
+
+    const onEnd = (e: TouchEvent) => {
+      if (directionRef.current !== "h") return;
+      const dx = e.changedTouches[0].clientX - startXRef.current;
+      if (dx <= -(SWIPE_THRESHOLD - 8)) {
+        swipedRef.current = true;
+        setSwiped(true);
+        setOffset(-SWIPE_THRESHOLD);
+      } else {
+        swipedRef.current = false;
+        setSwiped(false);
+        setOffset(0);
+      }
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+    };
+  }, []);
 
   return (
     <div className="relative overflow-hidden rounded-xl">
-      {/* Delete zone behind the card */}
+      {/* Delete zone revealed behind card on swipe-left */}
       <div
         className="absolute inset-y-0 left-0 flex items-center justify-center bg-danger"
-        style={{ width: SWIPE_THRESHOLD, borderRadius: "inherit" }}
+        style={{ width: SWIPE_THRESHOLD }}
       >
         <button
           onClick={() => { close(); onDelete(); }}
@@ -63,17 +103,14 @@ function SwipeableRow({
         </button>
       </div>
 
-      {/* Card — slides right→left on swipe */}
+      {/* Card */}
       <div
+        ref={cardRef}
         className={`card flex items-center justify-between gap-3 ${shift.is_past ? "opacity-60" : ""}`}
         style={{
           transform: `translateX(${offset}px)`,
           transition: offset === 0 || offset === -SWIPE_THRESHOLD ? "transform 0.2s ease" : "none",
-          touchAction: "pan-y",
         }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         onClick={swiped ? close : undefined}
       >
         <div className="flex items-center gap-3 min-w-0">
