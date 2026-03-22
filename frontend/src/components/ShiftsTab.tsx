@@ -54,21 +54,22 @@ function SwipeableRow({
       }
       if (directionRef.current !== "h") return;
 
-      e.preventDefault(); // blocks page scroll only for horizontal swipes
-      if (dx < 0) {
-        setOffset(Math.max(dx, -SWIPE_THRESHOLD));
+      e.preventDefault();
+      // RTL: swipe RIGHT (positive dx) reveals delete zone at left:0
+      if (dx > 0) {
+        setOffset(Math.min(dx, SWIPE_THRESHOLD));
       } else if (swipedRef.current) {
-        setOffset(Math.min(0, -SWIPE_THRESHOLD + dx));
+        setOffset(Math.max(0, SWIPE_THRESHOLD + dx));
       }
     };
 
     const onEnd = (e: TouchEvent) => {
       if (directionRef.current !== "h") return;
       const dx = e.changedTouches[0].clientX - startXRef.current;
-      if (dx <= -(SWIPE_THRESHOLD - 8)) {
+      if (dx >= SWIPE_THRESHOLD - 8) {
         swipedRef.current = true;
         setSwiped(true);
-        setOffset(-SWIPE_THRESHOLD);
+        setOffset(SWIPE_THRESHOLD);
       } else {
         swipedRef.current = false;
         setSwiped(false);
@@ -109,7 +110,7 @@ function SwipeableRow({
         className={`card flex items-center justify-between gap-3 ${shift.is_past ? "opacity-60" : ""}`}
         style={{
           transform: `translateX(${offset}px)`,
-          transition: offset === 0 || offset === -SWIPE_THRESHOLD ? "transform 0.2s ease" : "none",
+          transition: offset === 0 || offset === SWIPE_THRESHOLD ? "transform 0.2s ease" : "none",
         }}
         onClick={swiped ? close : undefined}
       >
@@ -331,9 +332,9 @@ export default function ShiftsTab() {
       {/* Swipe hint banner — shown once until dismissed */}
       {!readOnly && showSwipeHint && (
         <div className="flex items-center gap-3 bg-primary/8 border border-primary/20 rounded-xl px-4 py-3 slide-in">
-          <span className="text-lg select-none">👈</span>
+          <span className="text-lg select-none">👉</span>
           <span className="text-sm text-text-muted flex-1">
-            גרור משמרת שמאלה כדי למחוק אותה
+            גרור משמרת ימינה כדי למחוק אותה
           </span>
           <button
             onClick={dismissSwipeHint}
@@ -503,7 +504,7 @@ export default function ShiftsTab() {
               {/* Swipe hint inline */}
               {!isCollapsed && !readOnly && (
                 <div className="flex items-center gap-1 px-1 pb-0.5">
-                  <span className="text-[10px] text-text-dim select-none">← החלק למחיקה</span>
+                  <span className="text-[10px] text-text-dim select-none">→ החלק למחיקה</span>
                 </div>
               )}
 
