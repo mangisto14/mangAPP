@@ -1,3 +1,8 @@
+
+
+
+
+<---- גרסה 2 ---->
 <!DOCTYPE html>
 
 <html class="light" dir="rtl" lang="he"><head>
@@ -377,5 +382,405 @@
 <span class="material-symbols-outlined" data-icon="settings">settings</span>
 <span class="font-inter text-[11px] font-medium leading-tight mt-1">הגדרות</span>
 </a>
+</nav>
+</body></html>
+
+
+<---- גרסה 2 ---->
+<!DOCTYPE html>
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-lowest": "#0f172a",
+              "tertiary": "#0ea5e9",
+              "error": "#ff003c",
+              "on-primary-container": "#94a3b8",
+              "inverse-surface": "#f8fafc",
+              "secondary-fixed": "#22c55e",
+              "surface-tint": "#38bdf8",
+              "surface-bright": "#1e293b",
+              "background": "#020617",
+              "secondary-container": "#064e3b",
+              "surface-container-low": "#111827",
+              "primary-fixed": "#38bdf8",
+              "surface-dim": "#0f172a",
+              "on-tertiary": "#000000",
+              "on-surface": "#f1f5f9",
+              "surface-container": "#1e293b",
+              "on-secondary-container": "#4ade80",
+              "error-container": "#450a0a",
+              "on-error": "#ffffff",
+              "inverse-on-surface": "#020617",
+              "surface-container-high": "#334155",
+              "surface": "#0f172a",
+              "on-surface-variant": "#94a3b8",
+              "outline": "#475569",
+              "on-secondary-fixed-variant": "#dcfce7",
+              "on-background": "#f1f5f9",
+              "on-tertiary-container": "#7dd3fc",
+              "on-primary-fixed": "#082f49",
+              "tertiary-fixed": "#bae6fd",
+              "surface-variant": "#1e293b",
+              "surface-container-highest": "#334155",
+              "on-primary": "#000000",
+              "primary": "#38bdf8",
+              "tertiary-fixed-dim": "#7dd3fc",
+              "tertiary-container": "#0c4a6e",
+              "on-primary-fixed-variant": "#0ea5e9",
+              "on-tertiary-fixed": "#082f49",
+              "secondary": "#22c55e",
+              "primary-container": "#0c4a6e",
+              "on-secondary-fixed": "#052e16",
+              "outline-variant": "#334155",
+              "secondary-fixed-dim": "#4ade80",
+              "on-error-container": "#fecaca",
+              "inverse-primary": "#0ea5e9",
+              "on-secondary": "#000000",
+              "primary-fixed-dim": "#7dd3fc",
+              "on-tertiary-fixed-variant": "#0ea5e9"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style type="text/tailwindcss">
+    :root {
+      --cyber-bg: #020617;
+      --cyber-surface: #0f172a;
+      --cyber-accent: #38bdf8;
+      --cyber-success: #22c55e;
+      --cyber-error: #ff003c;
+      --cyber-text: #f1f5f9;
+      --cyber-dim: #64748b;
+    }
+    body { 
+        font-family: 'Inter', sans-serif;
+        background-color: var(--cyber-bg);
+        color: var(--cyber-text);
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    .cyber-card {
+        background: linear-gradient(145deg, #1e293b, #0f172a);
+        border: 1px solid rgba(56, 189, 248, 0.1);
+    }
+    .glow-blue { box-shadow: 0 0 15px rgba(56, 189, 248, 0.2); }
+    .glow-green { box-shadow: 0 0 15px rgba(34, 197, 94, 0.2); }
+    .glow-red { box-shadow: 0 0 15px rgba(255, 0, 60, 0.2); }
+</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex">
+<aside class="hidden md:flex flex-col h-screen w-72 bg-slate-950 border-l border-slate-800 fixed right-0 top-0 z-50 p-4">
+<div class="mb-8 px-4">
+<h2 class="text-lg font-black text-primary tracking-tight">Departments</h2>
+</div>
+<nav class="space-y-1">
+<div class="bg-primary text-background rounded-lg px-4 py-2 flex items-center gap-3">
+<span class="material-symbols-outlined text-xl">domain</span>
+<span class="text-sm font-medium tracking-wide uppercase">All Departments</span>
+</div>
+<div class="text-slate-400 hover:text-primary px-4 py-2 flex items-center gap-3 transition-all hover:bg-slate-900 cursor-pointer">
+<span class="material-symbols-outlined text-xl">settings_suggestion</span>
+<span class="text-sm font-medium tracking-wide uppercase">Operations</span>
+</div>
+<div class="text-slate-400 hover:text-primary px-4 py-2 flex items-center gap-3 transition-all hover:bg-slate-900 cursor-pointer">
+<span class="material-symbols-outlined text-xl">local_shipping</span>
+<span class="text-sm font-medium tracking-wide uppercase">Logistics</span>
+</div>
+<div class="text-slate-400 hover:text-primary px-4 py-2 flex items-center gap-3 transition-all hover:bg-slate-900 cursor-pointer">
+<span class="material-symbols-outlined text-xl">engineering</span>
+<span class="text-sm font-medium tracking-wide uppercase">Engineering</span>
+</div>
+<div class="text-slate-400 hover:text-primary px-4 py-2 flex items-center gap-3 transition-all hover:bg-slate-900 cursor-pointer">
+<span class="material-symbols-outlined text-xl">leaderboard</span>
+<span class="text-sm font-medium tracking-wide uppercase">Management</span>
+</div>
+</nav>
+</aside>
+<main class="flex-1 md:mr-72 pb-24 md:pb-8">
+<header class="fixed top-0 right-0 left-0 md:left-0 md:right-72 h-16 bg-background/80 backdrop-blur-md z-40 flex items-center justify-between px-6 border-b border-slate-800">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined md:hidden text-primary cursor-pointer active:scale-95 duration-150">menu</span>
+<div class="flex flex-col">
+<h1 class="font-sans antialiased font-bold text-lg tracking-tight text-white">מצבת כוח</h1>
+<span class="text-[10px] uppercase tracking-wider text-primary">Last Sync: Now</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-slate-400 hover:bg-slate-800 p-2 rounded-full cursor-pointer transition-colors">notifications</span>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-primary/30">
+<img class="w-full h-full object-cover" data-alt="User profile avatar of the department manager" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMm9UGoUJhlxJdT6BwnaV7Eb7BV5FYLDhf4fInUeUwsIK-yZKCim6g8cu34e6S2IbEnVUnbmgm8u3kh99NR-Zi1zdi5rJmFS1cQtyXvwxvATzWLGhczKqRXnqcbCpIZmxrVOQy84shlZ5X_HrFPwj7q-1d6Gf90CWBUWSHApcwa1kXZmAyWhmwTv0A7Eae7nhfnODGj43AGAvV7L1edOSS8MnKtmoq4OaGcI4-AdzIIBGo02NKGqyubEbNXVPJLGNvbTTSXWRGnMs"/>
+</div>
+</div>
+</header>
+<div class="mt-20 px-4 md:px-8 max-w-7xl mx-auto space-y-8">
+<section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+<div class="cyber-card glow-blue rounded-xl p-5 flex flex-col justify-between">
+<span class="text-[10px] font-bold uppercase tracking-widest text-primary">Total Personnel</span>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="text-3xl font-black text-white leading-none">142</span>
+<span class="text-xs font-semibold text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">trending_up</span> 2%
+                        </span>
+</div>
+</div>
+<div class="cyber-card glow-green rounded-xl p-5 border-r-4 border-secondary/40">
+<div class="flex justify-between items-start">
+<span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">On Duty</span>
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+</div>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="text-3xl font-black text-secondary leading-none">128</span>
+<span class="text-[10px] font-medium text-slate-400">90.1% Attendance</span>
+</div>
+</div>
+<div class="cyber-card glow-red rounded-xl p-5 border-r-4 border-error/40">
+<span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Missing Reports</span>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="text-3xl font-black text-error leading-none">14</span>
+<span class="bg-error text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Action Req</span>
+</div>
+</div>
+</section>
+<section class="bg-surface-container-low rounded-2xl p-1 border border-slate-800">
+<div class="p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+<div class="relative w-full sm:max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-primary text-lg">search</span>
+<input class="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 text-white placeholder:text-slate-600" placeholder="Search by name, role or ID..." type="text"/>
+</div>
+<div class="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+<button class="bg-primary text-background text-xs font-bold px-4 py-2 rounded-full whitespace-nowrap">All Active</button>
+<button class="bg-slate-800 text-slate-400 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap hover:bg-slate-700 transition-colors">On Leave</button>
+<button class="bg-slate-800 text-slate-400 text-xs font-semibold px-4 py-2 rounded-full whitespace-nowrap hover:bg-slate-700 transition-colors">Field Duty</button>
+</div>
+</div>
+<div class="grid grid-cols-12 px-6 py-3 border-b border-slate-800 text-[10px] font-bold uppercase tracking-tighter text-primary bg-slate-900/90 backdrop-blur sticky top-16 z-30">
+<div class="col-span-5 sm:col-span-4">Employee Details</div>
+<div class="hidden sm:block col-span-3 text-center">Department</div>
+<div class="col-span-4 sm:col-span-3 text-center">Status</div>
+<div class="col-span-3 sm:col-span-2 text-left">Check-in</div>
+</div>
+<div class="divide-y divide-slate-800">
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-xs">YB</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">יונתן ברק</span>
+<span class="text-[11px] text-slate-400 leading-none">Senior Engineer</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Engineering</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+<span class="text-[10px] font-bold text-secondary uppercase">Active</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-400">07:42 AM</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-tertiary/20 border border-tertiary/30 flex items-center justify-center text-tertiary font-bold text-xs">SL</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">שרה לוי</span>
+<span class="text-[11px] text-slate-400 leading-none">Operations Mgr</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Operations</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+<span class="text-[10px] font-bold text-secondary uppercase">Active</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-400">08:05 AM</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-error/20 border border-error/30 flex items-center justify-center text-error font-bold text-xs">AC</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">אבי כהן</span>
+<span class="text-[11px] text-slate-400 leading-none">Logistics Coord</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Logistics</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">Away</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-bold text-error">Missing</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 font-bold text-xs">MK</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">מיכל קפלן</span>
+<span class="text-[11px] text-slate-400 leading-none">Developer</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Engineering</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+<span class="text-[10px] font-bold text-secondary uppercase">Active</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-400">08:15 AM</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">DR</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">דן רפאלי</span>
+<span class="text-[11px] text-slate-400 leading-none">Security Officer</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Operations</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+<span class="text-[10px] font-bold text-secondary uppercase">Active</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-400">06:55 AM</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold text-xs">RN</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">רונית נאור</span>
+<span class="text-[11px] text-slate-400 leading-none">HR Director</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Management</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+<span class="text-[10px] font-bold text-secondary uppercase">Active</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-400">09:00 AM</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500 font-bold text-xs">GG</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">גלעד גדות</span>
+<span class="text-[11px] text-slate-400 leading-none">System Admin</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Engineering</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+<span class="text-[10px] font-bold text-slate-500 uppercase">Away</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-500">Yesterday</span>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/50 transition-colors group cursor-pointer">
+<div class="col-span-5 sm:col-span-4 flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-tertiary/20 border border-tertiary/30 flex items-center justify-center text-tertiary font-bold text-xs">OM</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-white tracking-tight">אורן מזרחי</span>
+<span class="text-[11px] text-slate-400 leading-none">Driver</span>
+</div>
+</div>
+<div class="hidden sm:block col-span-3 text-center">
+<span class="text-xs font-medium text-slate-300">Logistics</span>
+</div>
+<div class="col-span-4 sm:col-span-3 flex justify-center">
+<div class="flex items-center gap-1.5 px-2.5 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+<span class="text-[10px] font-bold text-secondary uppercase">Active</span>
+</div>
+</div>
+<div class="col-span-3 sm:col-span-2 text-left">
+<span class="text-xs font-medium text-slate-400">04:30 AM</span>
+</div>
+</div>
+</div>
+<div class="p-4 text-center">
+<button class="text-xs font-bold text-primary hover:text-white uppercase tracking-widest transition-colors">Load More Personnel</button>
+</div>
+</section>
+</div>
+</main>
+<nav class="md:hidden fixed bottom-0 left-0 w-full h-20 bg-slate-950/90 backdrop-blur-xl z-50 flex justify-around items-center px-4 pb-safe border-t border-slate-800 shadow-[0_-4px_12px_rgba(0,0,0,0.5)]">
+<div class="flex flex-col items-center justify-center text-primary bg-primary/10 border border-primary/20 rounded-xl px-3 py-1 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">badge</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Roster</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 hover:text-primary active:scale-90 transition-transform">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Stats</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 hover:text-primary active:scale-90 transition-transform">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Schedule</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 hover:text-primary active:scale-90 transition-transform">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-semibold uppercase tracking-tighter">Settings</span>
+</div>
 </nav>
 </body></html>
