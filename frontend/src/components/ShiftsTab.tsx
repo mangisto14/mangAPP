@@ -149,7 +149,15 @@ export default function ShiftsTab() {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [showSwipeHint, setShowSwipeHint] = useState(
+    () => !localStorage.getItem("shifts_swipe_hint_dismissed")
+  );
   const readOnly = useReadOnly();
+
+  const dismissSwipeHint = () => {
+    localStorage.setItem("shifts_swipe_hint_dismissed", "1");
+    setShowSwipeHint(false);
+  };
 
   /** Derive the backend filter + date range from UI state */
   function getApiParams(): {
@@ -282,6 +290,22 @@ export default function ShiftsTab() {
           onClose={() => setEditingShift(null)}
           onSaved={() => { setEditingShift(null); load(); }}
         />
+      )}
+      {/* Swipe hint banner — shown once until dismissed */}
+      {!readOnly && showSwipeHint && (
+        <div className="flex items-center gap-3 bg-primary/8 border border-primary/20 rounded-xl px-4 py-3 slide-in">
+          <span className="text-lg select-none">👈</span>
+          <span className="text-sm text-text-muted flex-1">
+            גרור משמרת שמאלה כדי למחוק אותה
+          </span>
+          <button
+            onClick={dismissSwipeHint}
+            className="text-text-dim hover:text-text transition-colors p-1 flex-shrink-0"
+            aria-label="סגור"
+          >
+            <X size={15} />
+          </button>
+        </div>
       )}
       {/* Undo toast */}
       {pendingDelete && (
@@ -438,6 +462,13 @@ export default function ShiftsTab() {
                 </button>
                 <div className="flex-1 h-px bg-bg-border" />
               </div>
+
+              {/* Swipe hint inline */}
+              {!isCollapsed && !readOnly && (
+                <div className="flex items-center gap-1 px-1 pb-0.5">
+                  <span className="text-[10px] text-text-dim select-none">← החלק למחיקה</span>
+                </div>
+              )}
 
               {/* Shift rows */}
               {!isCollapsed && dayShifts.map((s) =>
