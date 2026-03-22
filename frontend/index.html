@@ -31,7 +31,7 @@
         var d = localStorage.getItem("design") || "dark";
         var html = document.documentElement;
         html.setAttribute("data-design", d);
-        if (d === "dark" || d === "modern") html.setAttribute("data-dark", "");
+        if (d === "dark") html.setAttribute("data-dark", "");
       })();
     </script>
     <div id="root"></div>

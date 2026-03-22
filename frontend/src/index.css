@@ -47,24 +47,25 @@
   --accent-rgb:        99 102 241;
 }
 
-/* ── 3. MODERN (violet/cyan dark) ────────────────────────────── */
+/* ── 3. MODERN — Warm Earth (design_spec v3) ─────────────────── */
+/* beige-bg:#F5F2EA  terracotta:#B85C38  olive:#556B2F  rust:#A0522D */
 [data-design="modern"] {
-  --bg-deep-rgb:    10   8  24;   /* near-black violet */
-  --bg-base-rgb:    18  14  38;
-  --bg-card-rgb:    26  20  52;
-  --bg-border-rgb:  50  38  90;
-  --bg-hover-rgb:   35  27  68;
-  --text-rgb:      237 233 254;   /* violet-100 */
-  --text-muted-rgb:167 139 250;   /* violet-400 */
-  --text-dim-rgb:  109  90 173;
-  --body-grad-1:   #0a0818;
-  --body-grad-2:   #120e26;
-  --scrollbar-thumb: #3d2f70;
-  --primary-rgb:      139  92 246;   /* violet-500 */
-  --primary-hover-rgb:124  58 237;   /* violet-600 */
-  --primary-light-rgb:167 139 250;   /* violet-400 */
-  --secondary-rgb:      6 182 212;   /* cyan-500   */
-  --accent-rgb:        236  72 153;  /* pink-500   */
+  --bg-deep-rgb:   245 242 234;   /* beige-bg       */
+  --bg-base-rgb:   234 227 210;   /* soft-sand      */
+  --bg-card-rgb:   255 255 255;   /* warm-paper     */
+  --bg-border-rgb: 215 192 174;   /* earth-clay     */
+  --bg-hover-rgb:  234 227 210;   /* soft-sand      */
+  --text-rgb:       45  45  45;   /* deep-charcoal  */
+  --text-muted-rgb: 74  74  74;   /* on-surface-variant */
+  --text-dim-rgb:  140 120 100;
+  --body-grad-1:   #F5F2EA;
+  --body-grad-2:   #EAE3D2;
+  --scrollbar-thumb: #D7C0AE;
+  --primary-rgb:      184  92  56;   /* terracotta     */
+  --primary-hover-rgb:160  82  45;
+  --primary-light-rgb:210 130  80;
+  --secondary-rgb:     85 107  47;   /* olive-green    */
+  --accent-rgb:       160  82  45;   /* muted-rust     */
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -87,7 +88,7 @@
 
   [data-design="modern"] body {
     font-family: "Inter", "Assistant", sans-serif;
-    background: radial-gradient(ellipse at top, #1a1040 0%, #0a0818 50%, #12082a 100%);
+    background: linear-gradient(160deg, #F5F2EA 0%, #EAE3D2 55%, #F5F2EA 100%);
   }
 
   input, select, textarea {
@@ -105,8 +106,9 @@
   }
 
   [data-design="modern"] .card {
-    box-shadow: 0 0 0 1px rgb(var(--bg-border-rgb) / 0.6),
-                0 4px 24px rgb(var(--primary-rgb) / 0.08);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.06),
+                0 4px 16px rgb(var(--primary-rgb) / 0.06);
+    border-color: rgb(var(--bg-border-rgb) / 0.5);
   }
 
   .btn-primary {
@@ -167,13 +169,6 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--primary-rgb) / 0.4); }
-
-/* ══════════════════════════════════════════════════════════════
-   MODERN GLOW UTILITIES
-   ══════════════════════════════════════════════════════════════ */
-[data-design="modern"] .glow-primary {
-  box-shadow: 0 0 20px rgb(var(--primary-rgb) / 0.4);
-}
 
 /* ══════════════════════════════════════════════════════════════
    ANIMATIONS

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 export type DesignPreset = "dark" | "light" | "modern";
 
-const DARK_PRESETS: DesignPreset[] = ["dark", "modern"];
+const DARK_PRESETS: DesignPreset[] = ["dark"];
 
 export function useDesign() {
   const [design, setDesign] = useState<DesignPreset>(() => {

@@ -47,8 +47,8 @@ const DESIGN_PRESETS: { id: DesignPreset; label: string; swatches: string[]; des
   {
     id: "modern",
     label: "מודרני",
-    desc: "סגול ניאון",
-    swatches: ["#0a0818", "#8b5cf6", "#06b6d4"],
+    desc: "טרקוטה & זית",
+    swatches: ["#F5F2EA", "#B85C38", "#556B2F"],
   },
 ];
 
@@ -272,7 +272,7 @@ export default function App() {
       {/* ── Header ── */}
       <header className={`sticky top-0 z-50 border-b transition-colors duration-300
         ${isModern
-          ? "bg-bg-deep/80 backdrop-blur-xl border-bg-border/40 shadow-[0_1px_20px_rgb(139,92,246,0.12)]"
+          ? "bg-bg-deep/90 backdrop-blur-xl border-bg-border/60 shadow-sm"
           : "bg-bg-deep/90 backdrop-blur border-bg-border"
         }`}
       >
@@ -370,7 +370,7 @@ export default function App() {
         aria-label="ניווט ראשי"
         className={`fixed bottom-0 inset-x-0 z-50 transition-colors duration-300
           ${isModern
-            ? "bg-bg-deep/85 backdrop-blur-2xl border-t border-bg-border/30 shadow-[0_-4px_30px_rgb(139,92,246,0.1)]"
+            ? "bg-bg-deep/90 backdrop-blur-xl border-t border-bg-border/60 shadow-[0_-2px_12px_rgb(0,0,0,0.06)]"
             : "bg-bg-deep/95 backdrop-blur border-t border-bg-border"
           }`}
       >
@@ -394,8 +394,7 @@ export default function App() {
                 <span>{t.label}</span>
                 {active && (
                   <span
-                    className={`absolute bottom-0 w-8 h-0.5 rounded-full bg-primary
-                      ${isModern ? "shadow-[0_0_8px_rgb(139,92,246,0.8)]" : ""}`}
+                    className="absolute bottom-0 w-8 h-0.5 rounded-full bg-primary"
                     aria-hidden="true"
                   />
                 )}
