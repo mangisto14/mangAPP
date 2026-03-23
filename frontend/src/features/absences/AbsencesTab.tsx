@@ -381,7 +381,7 @@ export default function AbsencesTab() {
       : outFilter === "absent"
       ? absentOut
       : [...tempOut, ...absentOut];
-  const inside = absences.filter((a) => !a.is_out);
+  const inside = absences.filter((a) => !a.is_out && a.is_active);
   const filteredInside = search
     ? inside.filter((a) => a.name.includes(search))
     : inside;

@@ -3,6 +3,7 @@ export interface Guard {
   name: string;
   phone: string | null;
   role: string | null;
+  is_active: boolean;
   past: number;
   future: number;
   total: number;

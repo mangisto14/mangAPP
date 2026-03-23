@@ -9,6 +9,7 @@ interface EditState {
   name: string;
   phone: string;
   role: string;
+  isActive: boolean;
 }
 
 export default function GuardsTab() {
@@ -25,7 +26,7 @@ export default function GuardsTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const g = await getGuards();
+      const g = await getGuards(true);
       setGuards(g);
       const e: Record<number, EditState> = {};
       g.forEach((guard) => {
@@ -33,6 +34,7 @@ export default function GuardsTab() {
           name: guard.name,
           phone: guard.phone ?? "",
           role: guard.role ?? "",
+          isActive: guard.is_active,
         };
       });
       setEdits(e);
@@ -70,7 +72,7 @@ export default function GuardsTab() {
     const e = edits[id];
     if (!e?.name.trim()) return;
     try {
-      await updateGuard(id, e.name.trim(), e.phone || null, e.role || null);
+      await updateGuard(id, e.name.trim(), e.phone || null, e.role || null, e.isActive);
       showToast(`💾 ${e.name} עודכן`);
       load();
     } catch (err) {
@@ -93,10 +95,12 @@ export default function GuardsTab() {
     setPendingDelete(null);
   };
 
-  const setField = (id: number, field: keyof EditState, value: string) =>
+  const setField = <K extends keyof EditState>(id: number, field: K, value: EditState[K]) =>
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 
-  const overloaded = guards.filter((g) => g.overloaded);
+  const overloaded = guards.filter((g) => g.overloaded && g.is_active);
+  const activeCount = guards.filter((g) => g.is_active).length;
+  const inactiveCount = guards.length - activeCount;
 
   return (
     <div className="fade-in space-y-4">
@@ -184,7 +188,7 @@ export default function GuardsTab() {
               </button>
             )}
             <span className="text-xs text-text-dim bg-bg-base px-2 py-1 rounded-full">
-              {guards.length} אנשים
+              {activeCount} פעילים · {inactiveCount} לא פעילים
             </span>
           </div>
         </div>
@@ -202,7 +206,8 @@ export default function GuardsTab() {
               <div
                 key={g.id}
                 className={`rounded-xl border transition-all
-                  ${g.overloaded ? "border-warning/30 bg-warning/5" : "border-bg-border bg-bg-base"}`}
+                  ${g.overloaded ? "border-warning/30 bg-warning/5" : "border-bg-border bg-bg-base"}
+                  ${!g.is_active ? "opacity-60" : ""}`}
               >
                 {/* Main row */}
                 <div className="flex items-center gap-2 p-2.5">
@@ -214,6 +219,9 @@ export default function GuardsTab() {
                     className={`input flex-1 text-sm py-1.5 h-8 ${readOnly ? "cursor-default" : ""}`}
                   />
                   <div className="flex gap-1 shrink-0">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${g.is_active ? "bg-success/15 text-success" : "bg-danger/15 text-danger"}`}>
+                      {g.is_active ? "פעיל" : "לא פעיל"}
+                    </span>
                     <span className="pill-past">✅ {g.past}</span>
                     <span className="pill-future">🕐 {g.future}</span>
                   </div>
@@ -252,6 +260,15 @@ export default function GuardsTab() {
                 {/* Expanded: phone + role */}
                 {isOpen && (
                   <div className="px-3 pb-3 space-y-2 border-t border-bg-border pt-2 slide-in">
+                    <label className="flex items-center gap-2 text-sm text-text">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(e?.isActive)}
+                        onChange={(ev) => setField(g.id, "isActive", ev.target.checked)}
+                        className="w-4 h-4 accent-primary"
+                      />
+                      פעיל
+                    </label>
                     <div className="flex gap-2">
                       <div className="flex-1">
                         <label className="text-xs text-text-dim block mb-1">טלפון</label>

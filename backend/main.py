@@ -123,7 +123,8 @@ def init_db() -> None:
                 {_SERIAL_PK},
                 name  TEXT UNIQUE NOT NULL,
                 phone TEXT,
-                role  TEXT
+                role  TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1
             )
         """)
         conn.execute(f"""
@@ -183,6 +184,7 @@ def init_db() -> None:
         migrations = [
             "ALTER TABLE guards ADD COLUMN phone TEXT",
             "ALTER TABLE guards ADD COLUMN role TEXT",
+            "ALTER TABLE guards ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE absences ADD COLUMN reason TEXT",
         ]
         for sql in migrations:
@@ -750,6 +752,7 @@ class GuardUpdateBody(BaseModel):
     name: str
     phone: Optional[str] = None
     role: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class ShiftItem(BaseModel):
@@ -855,11 +858,14 @@ def verify_pin(pin: str = Query(...)):
 
 # ── Guards ────────────────────────────────────────────────────────────────────
 @app.get("/api/guards")
-def list_guards():
+def list_guards(include_inactive: bool = False):
     now = datetime.now()
     stats = compute_stats(now)
     with get_conn() as conn:
-        guards = conn.execute("SELECT * FROM guards ORDER BY name").fetchall()
+        if include_inactive:
+            guards = conn.execute("SELECT * FROM guards ORDER BY name").fetchall()
+        else:
+            guards = conn.execute("SELECT * FROM guards WHERE is_active = 1 ORDER BY name").fetchall()
     result = []
     for g in guards:
         s = stats.get(g["name"], {"past": 0, "future": 0})
@@ -868,6 +874,7 @@ def list_guards():
             "name": g["name"],
             "phone": g["phone"],
             "role": g["role"],
+            "is_active": bool(g["is_active"]),
             "past": s["past"],
             "future": s["future"],
             "total": s["past"] + s["future"],
@@ -901,14 +908,15 @@ def add_guards(body: GuardCreateBody):
 @app.put("/api/guards/{guard_id}")
 def update_guard(guard_id: int, body: GuardUpdateBody):
     with get_conn() as conn:
-        row = conn.execute(_q("SELECT name FROM guards WHERE id=?"), (guard_id,)).fetchone()
+        row = conn.execute(_q("SELECT name, is_active FROM guards WHERE id=?"), (guard_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Guard not found")
         old_name = row["name"]
+        next_is_active = int(body.is_active) if body.is_active is not None else row["is_active"]
         try:
             conn.execute(
-                _q("UPDATE guards SET name=?,phone=?,role=? WHERE id=?"),
-                (body.name, body.phone, body.role, guard_id),
+                _q("UPDATE guards SET name=?,phone=?,role=?,is_active=? WHERE id=?"),
+                (body.name, body.phone, body.role, next_is_active, guard_id),
             )
             if body.name != old_name:
                 for shift in conn.execute("SELECT id,names FROM shifts").fetchall():
@@ -1160,6 +1168,7 @@ def list_absences():
         result.append({
             "guard_id": g["id"],
             "name": g["name"],
+            "is_active": bool(g["is_active"]),
             "is_out": absence is not None,
             "left_at": absence["left_at"] if absence else None,
             "absence_id": absence["id"] if absence else None,
