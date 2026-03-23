@@ -460,7 +460,7 @@ export default function AddShiftTab({ onSaved }: Props) {
                         <AlertTriangle size={12} className="text-warning flex-shrink-0" />
                       )}
                       {isDuplicateToday(g.name) && (
-                        <AlertTriangle size={12} className="text-orange-400 flex-shrink-0" title="כבר שובץ היום" />
+                        <span title="כבר שובץ היום"><AlertTriangle size={12} className="text-orange-400 flex-shrink-0" /></span>
                       )}
                       {status === "default" && (
                         <span className="text-success text-[10px] font-bold">זמין</span>
