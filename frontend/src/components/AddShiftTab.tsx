@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, CheckCircle, XCircle, Sparkles, AlertTriangle } from "lucide-react";
-import { getGuards, addShifts, getSuggest } from "../api";
+import { getGuards, addShifts, getSuggest, getShifts } from "../api";
 import type { Guard, StagedShift, Suggestion } from "../types";
 import { getRotation } from "../features/rotation/api";
 import { computePeriods } from "../features/rotation/utils";
@@ -61,6 +61,7 @@ export default function AddShiftTab({ onSaved }: Props) {
   const [rotation, setRotation] = useState<RotationConfig | null>(null);
   const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
   const [activeOnAbsences, setActiveOnAbsences] = useState<{ name: string; reason: string | null }[]>([]);
+  const [assignedToday, setAssignedToday] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     getGuards().then(setGuards).catch(console.error);
@@ -74,6 +75,32 @@ export default function AddShiftTab({ onSaved }: Props) {
     getAbsences().then(setAbsences).catch(console.error);
     if (date) getAbsencesActiveOn(date).then(setActiveOnAbsences).catch(console.error);
   }, [date]);
+
+  // כשהתאריך משתנה: שלוף מה-DB אילו שומרים כבר שובצו ביום זה
+  useEffect(() => {
+    if (!date) return;
+    getShifts("all", date, date)
+      .then((shifts) => {
+        const names = new Set<string>();
+        shifts.forEach((s) => s.names.forEach((n) => names.add(n)));
+        setAssignedToday(names);
+      })
+      .catch(console.error);
+  }, [date]);
+
+  // שומרים שכבר בתור staged לאותו יום
+  const stagedToday = useMemo(() => {
+    const names = new Set<string>();
+    staged.forEach((s) => {
+      if (s.start_time.slice(0, 10) === date) {
+        s.names.forEach((n) => names.add(n));
+      }
+    });
+    return names;
+  }, [staged, date]);
+
+  const isDuplicateToday = (name: string) =>
+    assignedToday.has(name) || stagedToday.has(name);
 
   // Names from rotation slots for the selected date (lowercased)
   const rotationNamesForDate = useMemo(() => {
@@ -242,6 +269,11 @@ export default function AddShiftTab({ onSaved }: Props) {
       await Promise.all([
         getGuards().then(setGuards),
         getSuggest(3).then(setSuggestions),
+        getShifts("all", date, date).then((shifts) => {
+          const names = new Set<string>();
+          shifts.forEach((s) => s.names.forEach((n) => names.add(n)));
+          setAssignedToday(names);
+        }),
       ]);
       onSaved();
     } catch (e) {
@@ -260,6 +292,8 @@ export default function AddShiftTab({ onSaved }: Props) {
     const g = guards.find((g) => g.name === name);
     return g?.overloaded;
   });
+
+  const duplicateSelected = Array.from(selected).filter((name) => isDuplicateToday(name));
 
   return (
     <div className="fade-in space-y-4">
@@ -425,6 +459,9 @@ export default function AddShiftTab({ onSaved }: Props) {
                       {g.overloaded && (
                         <AlertTriangle size={12} className="text-warning flex-shrink-0" />
                       )}
+                      {isDuplicateToday(g.name) && (
+                        <AlertTriangle size={12} className="text-orange-400 flex-shrink-0" title="כבר שובץ היום" />
+                      )}
                       {status === "default" && (
                         <span className="text-success text-[10px] font-bold">זמין</span>
                       )}
@@ -444,6 +481,9 @@ export default function AddShiftTab({ onSaved }: Props) {
                         <span className="text-warning text-[10px] font-bold">יצא</span>
                       )}
                     </div>
+                    {isDuplicateToday(g.name) && (
+                      <div className="text-[10px] text-orange-400 font-bold">כבר שובץ היום</div>
+                    )}
                     <div className="flex gap-1 mt-0.5">
                       <span className="pill-past">✅ {g.past}</span>
                       <span className="pill-future">🕐 {g.future}</span>
@@ -454,6 +494,17 @@ export default function AddShiftTab({ onSaved }: Props) {
             })}
           </div>
         </div>
+
+        {/* Duplicate-today warning */}
+        {duplicateSelected.length > 0 && (
+          <div className="flex items-start gap-2 bg-orange-400/10 border border-orange-400/30 rounded-xl p-3">
+            <AlertTriangle size={16} className="text-orange-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-orange-400">
+              <strong>שים לב:</strong>{" "}
+              {duplicateSelected.join(", ")} כבר שובץ/ים למשמרת ביום זה
+            </div>
+          </div>
+        )}
 
         {/* Overload warning */}
         {overloadedSelected.length > 0 && (
