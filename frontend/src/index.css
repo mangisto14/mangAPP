@@ -68,6 +68,26 @@
   --accent-rgb:       160  82  45;   /* muted-rust     */
 }
 
+/* ── 4. CONTRAST — High Contrast Accessibility ───────────────── */
+[data-design="contrast"] {
+  --bg-deep-rgb:     0   0   0;
+  --bg-base-rgb:    10  10  10;
+  --bg-card-rgb:    18  18  18;
+  --bg-border-rgb: 255 255   0;   /* bright yellow borders */
+  --bg-hover-rgb:   35  35  35;
+  --text-rgb:      255 255 255;
+  --text-muted-rgb:220 220 220;
+  --text-dim-rgb:  180 180 180;
+  --body-grad-1:   #000000;
+  --body-grad-2:   #0a0a0a;
+  --scrollbar-thumb: #ffff00;
+  --primary-rgb:       255 255   0;   /* bright yellow */
+  --primary-hover-rgb: 220 220   0;
+  --primary-light-rgb: 255 255 100;
+  --secondary-rgb:       0 255   0;   /* bright green  */
+  --accent-rgb:          0 200 255;   /* bright cyan   */
+}
+
 /* ══════════════════════════════════════════════════════════════
    BASE
    ══════════════════════════════════════════════════════════════ */

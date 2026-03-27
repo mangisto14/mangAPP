@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Bell, BellOff } from "lucide-react";
 import Clock from "./Clock";
 import {
   getAbsences, markLeave, markReturn, resetAbsence,
@@ -11,6 +12,7 @@ import type { RotationConfig } from "../rotation/types";
 import { computePeriods } from "../rotation/utils";
 import { SkeletonAbsenceCards, SkeletonTableRows } from "../../components/Skeleton";
 import { useReadOnly } from "../../hooks/useReadOnly";
+import { usePushNotifications } from "../../hooks/usePushNotifications";
 
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
@@ -262,6 +264,8 @@ export default function AbsencesTab() {
   // tick to re-evaluate alert state every 30s
   const [, setTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const notifiedRef = useRef<Set<string>>(new Set());
+  const { enabled: pushEnabled, toggle: togglePush, isSupported: pushSupported, notify } = usePushNotifications();
 
   const load = useCallback(async () => {
     try {
@@ -281,6 +285,28 @@ export default function AbsencesTab() {
     timerRef.current = setInterval(() => setTick((t) => t + 1), 30000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [load]);
+
+  // Fire push notifications when guards cross alert thresholds
+  useEffect(() => {
+    if (!pushEnabled || !settings.alert_thresholds.length) return;
+    absences.filter((a) => a.is_out && a.left_at).forEach((a) => {
+      const level = getAlertLevel(a.left_at!, settings.alert_thresholds);
+      if (!level) return;
+      const key = `${a.guard_id}-${level}`;
+      if (notifiedRef.current.has(key)) return;
+      notifiedRef.current.add(key);
+      const labels: Record<string, string> = { warning: "אזהרה", danger: "סכנה", critical: "קריטי" };
+      notify(
+        `⚠️ ${labels[level] ?? level} – מצבת כוח`,
+        `${a.name} מחוץ למסגרת זמן ממושך`,
+        key
+      );
+    });
+    // Clear keys for guards who returned
+    absences.filter((a) => !a.is_out).forEach((a) => {
+      ["warning","danger","critical"].forEach((l) => notifiedRef.current.delete(`${a.guard_id}-${l}`));
+    });
+  }, [absences, settings.alert_thresholds, pushEnabled, notify]);
 
   function toggleSelect(id: number) {
     setSelectedIds((prev) => {
@@ -412,6 +438,27 @@ export default function AbsencesTab() {
           </button>
         ))}
       </div>
+
+      {/* Push notification toggle */}
+      {pushSupported && (
+        <div className="flex items-center justify-between bg-bg-base border border-bg-border rounded-xl px-3 py-2">
+          <span className="text-xs text-text-muted">
+            {pushEnabled ? "📳 התראות פעילות" : "🔕 התראות כבויות"}
+          </span>
+          <button
+            onClick={togglePush}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all
+              ${pushEnabled
+                ? "bg-primary/10 border-primary/30 text-primary-light hover:bg-primary/20"
+                : "bg-bg-hover border-bg-border text-text-dim hover:text-text hover:border-primary/30"
+              }`}
+            aria-label={pushEnabled ? "כבה התראות" : "הפעל התראות"}
+          >
+            {pushEnabled ? <BellOff size={13} /> : <Bell size={13} />}
+            {pushEnabled ? "כבה" : "הפעל"}
+          </button>
+        </div>
+      )}
 
       {view === "history" ? (
         <HistoryView absences={absences} />

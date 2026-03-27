@@ -88,22 +88,43 @@ function exportMonthlyReport(shifts: Shift[]) {
 // ── Mini bar chart ────────────────────────────────────────────────────────────
 
 function BarChart({ buckets }: { buckets: { label: string; count: number }[] }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const max = Math.max(...buckets.map((b) => b.count), 1);
+  const total = buckets.reduce((s, b) => s + b.count, 0);
+
   return (
-    <div className="flex items-end gap-1 h-20 w-full">
+    <div className="relative flex items-end gap-1 h-24 w-full">
       {buckets.map((b, i) => {
         const pct = Math.round((b.count / max) * 100);
         const isLast = i === buckets.length - 1;
+        const isHovered = hoveredIdx === i;
+        const sharePct = total > 0 ? Math.round((b.count / total) * 100) : 0;
         return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-[9px] text-text-dim tabular-nums">
-              {b.count > 0 ? b.count : ""}
-            </span>
-            <div className="w-full flex items-end" style={{ height: 44 }}>
+          <div
+            key={i}
+            className="relative flex-1 flex flex-col items-center gap-1 group"
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            onTouchStart={() => setHoveredIdx(i)}
+            onTouchEnd={() => setTimeout(() => setHoveredIdx(null), 1200)}
+          >
+            {/* Tooltip */}
+            {isHovered && b.count > 0 && (
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none
+                              bg-bg-card border border-bg-border text-text text-[10px] font-semibold
+                              px-2 py-1 rounded-lg shadow-lg whitespace-nowrap scale-in">
+                {b.count} · {sharePct}%
+              </div>
+            )}
+            <div className="w-full flex items-end" style={{ height: 56 }}>
               <div
                 style={{ height: `${Math.max(pct, 4)}%` }}
-                className={`w-full rounded-t transition-all ${
-                  isLast ? "bg-primary/70" : "bg-primary/30"
+                className={`w-full rounded-t transition-all duration-200 ${
+                  isHovered
+                    ? "bg-primary scale-y-105 origin-bottom"
+                    : isLast
+                    ? "bg-primary/70"
+                    : "bg-primary/30"
                 }`}
               />
             </div>

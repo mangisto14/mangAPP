@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown, Undo2 } from "lucide-react";
+import { Trash2, Save, AlertTriangle, UserPlus, ChevronDown, Undo2, Search, X } from "lucide-react";
 import { getGuards, addGuards, updateGuard, deleteGuard } from "../api";
 import type { Guard } from "../types";
 import { SkeletonGuardCards } from "./Skeleton";
@@ -20,6 +20,7 @@ export default function GuardsTab() {
   const [toast, setToast] = useState("");
   const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string } | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const readOnly = useReadOnly();
 
   const load = async () => {
@@ -97,6 +98,10 @@ export default function GuardsTab() {
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 
   const overloaded = guards.filter((g) => g.overloaded);
+  const q = searchQuery.trim().toLowerCase();
+  const visibleGuards = q
+    ? guards.filter((g) => g.name.toLowerCase().includes(q) || (g.role ?? "").toLowerCase().includes(q))
+    : guards;
 
   return (
     <div className="fade-in space-y-4">
@@ -184,9 +189,28 @@ export default function GuardsTab() {
               </button>
             )}
             <span className="text-xs text-text-dim bg-bg-base px-2 py-1 rounded-full">
-              {guards.length} אנשים
+              {visibleGuards.length}/{guards.length} אנשים
             </span>
           </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="חיפוש לפי שם או תפקיד..."
+            className="input pr-9 text-sm py-2"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text"
+            >
+              <X size={13} />
+            </button>
+          )}
         </div>
 
         {loading && <SkeletonGuardCards />}
@@ -195,7 +219,7 @@ export default function GuardsTab() {
         )}
 
         <div className="space-y-2 max-h-[500px] overflow-y-auto">
-          {guards.map((g) => {
+          {visibleGuards.map((g) => {
             const e = edits[g.id];
             const isOpen = expanded === g.id;
             return (

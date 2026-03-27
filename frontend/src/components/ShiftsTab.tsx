@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Trash2, Pencil, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
+import { Trash2, Pencil, MessageCircle, Copy, Check, X, Plus, ChevronDown, ChevronUp, Undo2, Search } from "lucide-react";
 import { getShifts, deleteShift, getWhatsapp } from "../api";
 import type { Shift } from "../types";
 import AddShiftTab from "./AddShiftTab";
@@ -8,6 +8,32 @@ import { SkeletonShiftCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
 
 const SWIPE_THRESHOLD = 72;
+
+const HE_DAY_WA: Record<string, string> = {
+  Sunday: "ראשון", Monday: "שני", Tuesday: "שלישי", Wednesday: "רביעי",
+  Thursday: "חמישי", Friday: "שישי", Saturday: "שבת",
+};
+
+function buildWaText(shifts: Shift[], title: string): string {
+  const now = new Date();
+  const lines = [`🛡️ *${title}*`, `📆 ${now.toLocaleDateString("he-IL")} ${now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`, ""];
+  let currentDate = "";
+  for (const s of [...shifts].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())) {
+    const start = new Date(s.start_time);
+    const end = new Date(s.end_time);
+    const dateStr = start.toLocaleDateString("he-IL");
+    const dayName = HE_DAY_WA[start.toLocaleDateString("en-US", { weekday: "long" })] ?? "";
+    if (dateStr !== currentDate) {
+      if (currentDate) lines.push("");
+      lines.push(`🗓️ *יום ${dayName} ${dateStr}:*`);
+      currentDate = dateStr;
+    }
+    const time = `${String(start.getHours()).padStart(2,"0")}:${String(start.getMinutes()).padStart(2,"0")}–${String(end.getHours()).padStart(2,"0")}:${String(end.getMinutes()).padStart(2,"0")}`;
+    lines.push(`• ${time} ▸ ${s.names.join(", ")}`);
+  }
+  lines.push("", "_מצבת כוח_ 🛡️");
+  return lines.join("\n");
+}
 
 function SwipeableRow({
   shift,
@@ -259,6 +285,8 @@ export default function ShiftsTab() {
   };
 
   const [copied, setCopied] = useState(false);
+  const [showWaMenu, setShowWaMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleWhatsApp = async () => {
     const { url } = await getWhatsapp();
@@ -272,6 +300,29 @@ export default function ShiftsTab() {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleWaTemplate = (type: "all" | "today" | "tomorrow") => {
+    setShowWaMenu(false);
+    const today = toYMD(new Date());
+    const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrow = toYMD(tomorrowDate);
+    let filtered: Shift[];
+    let title: string;
+    if (type === "today") {
+      filtered = shifts.filter((s) => s.start_time.slice(0, 10) === today);
+      title = "סידור שמירה – היום";
+    } else if (type === "tomorrow") {
+      filtered = shifts.filter((s) => s.start_time.slice(0, 10) === tomorrow);
+      title = "סידור שמירה – מחר";
+    } else {
+      const now = new Date().toISOString();
+      filtered = shifts.filter((s) => s.start_time >= now);
+      title = "סידור שמירה";
+    }
+    if (!filtered.length) { alert("אין משמרות להצגה"); return; }
+    const text = buildWaText(filtered, title);
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const handleToday = () => {
@@ -303,9 +354,14 @@ export default function ShiftsTab() {
     });
   };
 
-  // Group by date
+  // Group by date (with optional search filter)
+  const q = searchQuery.trim().toLowerCase();
+  const filteredShifts = q
+    ? shifts.filter((s) => s.names.some((n) => n.toLowerCase().includes(q)))
+    : shifts;
+
   const grouped: Record<string, Shift[]> = {};
-  for (const s of shifts) {
+  for (const s of filteredShifts) {
     const { date } = formatDate(s.start_time);
     if (!grouped[date]) grouped[date] = [];
     grouped[date].push(s);
@@ -391,16 +447,69 @@ export default function ShiftsTab() {
             {copied ? "הועתק!" : "העתק"}
           </button>
           {!readOnly && (
-            <button
-              onClick={handleWhatsApp}
-              className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
-                         border border-success/30 px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
-            >
-              <MessageCircle size={15} />
-              שלח
-            </button>
+            <div className="relative">
+              <div className="flex">
+                <button
+                  onClick={handleWhatsApp}
+                  className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
+                             border border-success/30 px-3 py-1.5 rounded-r-none rounded-l-xl text-sm font-semibold transition-all border-l"
+                >
+                  <MessageCircle size={15} />
+                  שלח
+                </button>
+                <button
+                  onClick={() => setShowWaMenu((v) => !v)}
+                  className="flex items-center bg-success/10 hover:bg-success/20 text-success
+                             border border-success/30 border-r px-2 rounded-l-none rounded-r-xl text-sm transition-all"
+                  aria-label="תבניות WhatsApp"
+                >
+                  <ChevronDown size={13} className={`transition-transform ${showWaMenu ? "rotate-180" : ""}`} />
+                </button>
+              </div>
+              {showWaMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowWaMenu(false)} />
+                  <div className="absolute left-0 top-full mt-1 bg-bg-card border border-bg-border
+                                  rounded-xl shadow-lg z-20 min-w-[130px] overflow-hidden scale-in">
+                    {[
+                      { id: "all" as const,      label: "כל המשמרות" },
+                      { id: "today" as const,    label: "היום בלבד"  },
+                      { id: "tomorrow" as const, label: "מחר בלבד"   },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => handleWaTemplate(t.id)}
+                        className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                                   hover:bg-bg-base transition-colors"
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative">
+        <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="חיפוש לפי שם שומר..."
+          className="input pr-9 text-sm py-2"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text"
+          >
+            <X size={13} />
+          </button>
+        )}
       </div>
 
       {/* Add shift panel toggle — hidden for viewers */}

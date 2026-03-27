@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ShiftsTab from "./components/ShiftsTab";
 import GuardsTab from "./components/GuardsTab";
 import StatsTab from "./components/StatsTab";
+import CalendarTab from "./components/CalendarTab";
 import PinScreen from "./components/PinScreen";
 import AbsencesTab from "./features/absences/AbsencesTab";
 import RotationTab from "./features/rotation/RotationTab";
@@ -10,10 +11,11 @@ import type { AlertThreshold } from "./features/absences/types";
 import { useDesign, type DesignPreset } from "./hooks/useDesign";
 import { useFontSize } from "./hooks/useFontSize";
 import { ReadOnlyContext } from "./hooks/useReadOnly";
-import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
+import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon, CalendarIcon } from "./components/TabIcons";
 
 const TABS = [
   { id: "shifts",   Icon: ShiftsIcon,   label: "משמרות"    },
+  { id: "calendar", Icon: CalendarIcon, label: "לוח שנה"   },
   { id: "absences", Icon: AbsencesIcon, label: "יציאות"    },
   { id: "rotation", Icon: RotationIcon, label: "סבב"       },
   { id: "guards",   Icon: GuardsIcon,   label: "כוח אדם"   },
@@ -49,6 +51,12 @@ const DESIGN_PRESETS: { id: DesignPreset; label: string; swatches: string[]; des
     label: "מודרני",
     desc: "טרקוטה & זית",
     swatches: ["#F5F2EA", "#B85C38", "#556B2F"],
+  },
+  {
+    id: "contrast",
+    label: "ניגודיות",
+    desc: "נגישות גבוהה",
+    swatches: ["#000000", "#ffff00", "#00ff00"],
   },
 ];
 
@@ -359,6 +367,7 @@ export default function App() {
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 pt-5">
         {tab === "shifts"   && <ShiftsTab />}
+        {tab === "calendar" && <CalendarTab />}
         {tab === "absences" && !readOnly && <AbsencesTab />}
         {tab === "rotation" && <RotationTab />}
         {tab === "guards"   && <GuardsTab />}

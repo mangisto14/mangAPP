@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-export type DesignPreset = "dark" | "light" | "modern";
+export type DesignPreset = "dark" | "light" | "modern" | "contrast";
 
-const DARK_PRESETS: DesignPreset[] = ["dark"];
+const DARK_PRESETS: DesignPreset[] = ["dark", "contrast"];
 
 export function useDesign() {
   const [design, setDesign] = useState<DesignPreset>(() => {

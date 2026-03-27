@@ -610,6 +610,8 @@ export default function RotationTab() {
   const numPeriods = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0);
   const periods = computePeriods(config, numPeriods);
   const activePeriod = periods.find((p) => p.isActive);
+  const activeIdx = periods.findIndex((p) => p.isActive);
+  const nextPeriodIdx = activeIdx >= 0 && activeIdx + 1 < periods.length ? activeIdx + 1 : -1;
 
   // Build name → role map for mismatch detection
   const guardRoleMap = new Map<string, string | null>(
@@ -773,17 +775,26 @@ export default function RotationTab() {
                              sticky right-0 bg-bg-deep z-10">
                 תפקיד
               </th>
-              {periods.map((p) => (
+              {periods.map((p, pi) => {
+                const isNext = pi === nextPeriodIdx;
+                return (
                 <th
                   key={p.slotIndex}
                   ref={p.isActive ? activePeriodRef : undefined}
                   className={`text-center py-2 px-1 text-xs font-semibold whitespace-nowrap
                     ${p.isActive
                       ? "text-primary bg-primary/10 rounded-t-lg border-t border-x border-primary/25"
+                      : isNext
+                      ? "text-success bg-success/5 rounded-t-lg border-t border-x border-success/20"
                       : "text-text-dim"
                     }`}
                 >
                   <div className="flex flex-col items-center gap-0.5">
+                    {isNext && (
+                      <span className="text-[9px] font-bold text-success bg-success/15 px-1.5 py-0.5 rounded-full mb-0.5">
+                        הבא
+                      </span>
+                    )}
                     {readOnly ? (
                       <span>{p.label}</span>
                     ) : (
@@ -796,7 +807,7 @@ export default function RotationTab() {
                       </button>
                     )}
                     <span className={`text-[10px] font-normal
-                      ${p.isActive ? "text-primary-light" : "text-text-dim/60"}`}>
+                      ${p.isActive ? "text-primary-light" : isNext ? "text-success/70" : "text-text-dim/60"}`}>
                       {p.periodLabel}
                     </span>
                     {!readOnly && (
@@ -826,7 +837,8 @@ export default function RotationTab() {
                     )}
                   </div>
                 </th>
-              ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody>
