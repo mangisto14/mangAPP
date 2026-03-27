@@ -94,7 +94,6 @@ export default function CalendarTab() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const weekEnd = addDays(weekStart, 7);
   const from = toYMD(weekStart);
   const to = toYMD(addDays(weekStart, 6));
 
