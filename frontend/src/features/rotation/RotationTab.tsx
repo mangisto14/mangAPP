@@ -497,13 +497,9 @@ async function parseImportFile(
   // Map column index → slotIndex
   // Strategy: date-label match first; if no periods stored in DB (config.periods empty),
   // fall back to column-position mapping (col 1 → slot 0, col 2 → slot 1, …)
-  const useFallback = !periods.some((p) => {
-    // check if any header matches — if none match, use positional fallback
-    for (let ci = 1; ci < headerRow.length; ci++) {
-      if (matchPeriodByHeader(String(headerRow[ci]), periods)) return true;
-    }
-    return false;
-  });
+  // If no header matches any period by date, fall back to column-position mapping
+  const anyHeaderMatches = headerRow.slice(1).some((h) => !!matchPeriodByHeader(String(h), periods));
+  const useFallback = !anyHeaderMatches;
   const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
     if (ci === 0) return null;
     if (useFallback) {
@@ -668,7 +664,7 @@ export default function RotationTab() {
   const [duplicateSourcePeriod, setDuplicateSourcePeriod] = useState<Period | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAddWeekModal, setShowAddWeekModal] = useState(false);
-  const [addWeekCount, setAddWeekCount] = useState(3);
+  const [addWeekPeriods, setAddWeekPeriods] = useState<{ start: string; end: string }[]>([]);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -716,18 +712,25 @@ export default function RotationTab() {
     }
   };
 
-  const handleAddWeek = async (periodsPerWeek: number) => {
+  const handleAddWeek = async (newPeriods: { start: string; end: string }[]) => {
     if (!config) return;
     setShowAddWeekModal(false);
     setAddingWeek(true);
     try {
       const maxRoleSlots = config.roles.reduce((max, role) => Math.max(max, role.slots.length), 0);
-      const currentPeriods = Math.max(9, config.periods?.length ?? 0, maxRoleSlots);
-      const nextPeriods = currentPeriods + periodsPerWeek;
+      const currentSlotCount = Math.max(9, config.periods?.length ?? 0, maxRoleSlots);
+      const nextSlotCount = currentSlotCount + newPeriods.length;
 
       for (const role of config.roles) {
-        const newSlots = Array.from({ length: nextPeriods }, (_, i) => role.slots[i] ?? []);
+        const newSlots = Array.from({ length: nextSlotCount }, (_, i) => role.slots[i] ?? []);
         await updateRotationSlots(role.id, newSlots);
+      }
+
+      for (let i = 0; i < newPeriods.length; i++) {
+        const { start, end } = newPeriods[i];
+        if (start && end) {
+          await updateRotationPeriod(currentSlotCount + i, start, end);
+        }
       }
 
       await load();
@@ -837,7 +840,22 @@ export default function RotationTab() {
                   {!readOnly && (
                     <>
                       <button
-                        onClick={() => { setShowActionsMenu(false); setAddWeekCount(3); setShowAddWeekModal(true); }}
+                        onClick={() => {
+                          setShowActionsMenu(false);
+                          // compute default start from last period end
+                          const lastPeriod = periods.length > 0 ? periods[periods.length - 1] : null;
+                          const base = lastPeriod ? new Date(lastPeriod.end) : new Date();
+                          const d = (n: number) => {
+                            const dt = new Date(base); dt.setDate(dt.getDate() + n);
+                            return dateInputValue(dt);
+                          };
+                          setAddWeekPeriods([
+                            { start: d(0), end: d(2) },
+                            { start: d(2), end: d(4) },
+                            { start: d(4), end: d(7) },
+                          ]);
+                          setShowAddWeekModal(true);
+                        }}
                         disabled={addingWeek}
                         className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
                                    hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
@@ -1138,48 +1156,86 @@ export default function RotationTab() {
       {showAddWeekModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={() => setShowAddWeekModal(false)}>
           <div
-            className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in max-w-2xl mx-auto"
+            className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in
+                       max-w-2xl mx-auto max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-5 border-b border-bg-border">
-              <h2 className="font-bold text-text text-lg">הוספת שבוע — בחר מספר תקופות</h2>
+            <div className="flex items-center justify-between p-5 border-b border-bg-border shrink-0">
+              <h2 className="font-bold text-text text-lg">הוספת תקופות חדשות</h2>
               <button onClick={() => setShowAddWeekModal(false)} className="text-text-dim hover:text-text text-xl px-2">✕</button>
             </div>
-            <div className="p-5 space-y-4">
-              <div className="text-xs text-text-dim bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
-                כמה slot (תקופות) להוסיף לשבוע?
-              </div>
-              {[
-                { count: 2, label: "2 תקופות", desc: "3+4 ימים לשבוע" },
-                { count: 3, label: "3 תקופות", desc: "2+2+3 ימים לשבוע (ברירת מחדל)" },
-                { count: 1, label: "תקופה אחת", desc: "שבוע שלם — 7 ימים" },
-              ].map(({ count, label, desc }) => (
-                <label
-                  key={count}
-                  className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-all
-                    ${addWeekCount === count ? "border-primary/50 bg-primary/10" : "border-bg-border bg-bg-base/30 hover:bg-bg-base/60"}`}
-                >
-                  <div>
-                    <div className="text-sm font-semibold text-text">{label}</div>
-                    <div className="text-xs text-text-dim">{desc}</div>
+
+            <div className="overflow-y-auto flex-1 p-5 space-y-3">
+              {addWeekPeriods.map((p, i) => (
+                <div key={i} className="card space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-text-dim">תקופה {i + 1}</span>
+                    {addWeekPeriods.length > 1 && (
+                      <button
+                        onClick={() => setAddWeekPeriods((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-danger/60 hover:text-danger text-xs"
+                      >
+                        הסר
+                      </button>
+                    )}
                   </div>
-                  <input
-                    type="radio"
-                    name="addWeekCount"
-                    checked={addWeekCount === count}
-                    onChange={() => setAddWeekCount(count)}
-                    className="accent-primary w-4 h-4"
-                  />
-                </label>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <label className="text-xs text-text-dim block mb-1">מתאריך</label>
+                      <input
+                        type="date"
+                        value={p.start}
+                        onChange={(e) => setAddWeekPeriods((prev) =>
+                          prev.map((r, idx) => idx === i ? { ...r, start: e.target.value } : r)
+                        )}
+                        className="input text-sm w-full"
+                      />
+                    </div>
+                    <div className="text-text-dim pt-4">—</div>
+                    <div className="flex-1">
+                      <label className="text-xs text-text-dim block mb-1">עד תאריך</label>
+                      <input
+                        type="date"
+                        value={p.end}
+                        onChange={(e) => setAddWeekPeriods((prev) =>
+                          prev.map((r, idx) => idx === i ? { ...r, end: e.target.value } : r)
+                        )}
+                        className="input text-sm w-full"
+                      />
+                    </div>
+                  </div>
+                  {p.start && p.end && p.end > p.start && (
+                    <div className="text-xs text-success">
+                      {Math.round((new Date(p.end).getTime() - new Date(p.start).getTime()) / 86400000)} ימים
+                    </div>
+                  )}
+                  {p.start && p.end && p.end <= p.start && (
+                    <div className="text-xs text-danger">תאריך סיום חייב להיות אחרי ההתחלה</div>
+                  )}
+                </div>
               ))}
-            </div>
-            <div className="px-5 pb-2">
+
               <button
-                onClick={() => handleAddWeek(addWeekCount)}
-                disabled={addingWeek}
+                onClick={() => {
+                  const last = addWeekPeriods[addWeekPeriods.length - 1];
+                  const base = last?.end ? new Date(last.end) : new Date();
+                  const d = (n: number) => { const dt = new Date(base); dt.setDate(dt.getDate() + n); return dateInputValue(dt); };
+                  setAddWeekPeriods((prev) => [...prev, { start: d(0), end: d(2) }]);
+                }}
+                className="w-full border border-dashed border-bg-border text-text-dim hover:text-text
+                           hover:border-primary/40 text-sm py-2 rounded-xl transition-colors"
+              >
+                + הוסף תקופה נוספת
+              </button>
+            </div>
+
+            <div className="p-5 border-t border-bg-border shrink-0">
+              <button
+                onClick={() => handleAddWeek(addWeekPeriods)}
+                disabled={addingWeek || addWeekPeriods.some((p) => !p.start || !p.end || p.end <= p.start)}
                 className="btn-primary w-full"
               >
-                {addingWeek ? "מוסיף..." : `הוסף ${addWeekCount} תקופות`}
+                {addingWeek ? "מוסיף..." : `הוסף ${addWeekPeriods.length} תקופות`}
               </button>
             </div>
           </div>
