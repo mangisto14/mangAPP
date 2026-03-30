@@ -596,13 +596,9 @@ async function applyImport(preview: ImportPreview, config: RotationConfig) {
     await updateRotationSlots(id, newSlots);
   }
 
-  // 2. Save period date ranges parsed from file headers
-  //    Only overwrite periods that don't already have a custom range in DB
-  const existingSlots = new Set((config.periods ?? []).map((p) => p.slot_num));
+  // 2. Save period date ranges parsed from file headers (always overwrite from file)
   for (const [slotIdx, { start, end }] of preview.periodRanges.entries()) {
-    if (!existingSlots.has(slotIdx)) {
-      await updateRotationPeriod(slotIdx, start, end);
-    }
+    await updateRotationPeriod(slotIdx, start, end);
   }
 }
 
