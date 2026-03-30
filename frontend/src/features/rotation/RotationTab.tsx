@@ -558,9 +558,9 @@ async function applyImport(preview: ImportPreview, config: RotationConfig) {
     await updateRotationSlots(id, newSlots);
   }
 
-  // 2. Save period date ranges parsed from file headers (always overwrite from file)
+  // 2. Save period date ranges parsed from file headers (force=true skips overlap check)
   for (const [slotIdx, { start, end }] of preview.periodRanges.entries()) {
-    await updateRotationPeriod(slotIdx, start, end);
+    await updateRotationPeriod(slotIdx, start, end, true);
   }
 }
 

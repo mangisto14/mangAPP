@@ -1477,7 +1477,7 @@ def update_rotation_config(body: RotationConfigUpdateBody):
 
 
 @app.put("/api/rotation/periods/{slot_num}")
-def update_rotation_period(slot_num: int, body: RotationPeriodUpdateBody):
+def update_rotation_period(slot_num: int, body: RotationPeriodUpdateBody, force: bool = False):
     if slot_num < 0:
         raise HTTPException(400, "slot_num must be >= 0")
     try:
@@ -1489,22 +1489,23 @@ def update_rotation_period(slot_num: int, body: RotationPeriodUpdateBody):
         raise HTTPException(400, "end_date must be after start_date")
 
     with get_conn() as conn:
-        overlaps = conn.execute(
-            _q(
-                "SELECT slot_num, start_date, end_date FROM rotation_period_ranges "
-                "WHERE slot_num <> ?"
-            ),
-            (slot_num,),
-        ).fetchall()
-        for row in overlaps:
-            other_start = date.fromisoformat(row["start_date"])
-            other_end = date.fromisoformat(row["end_date"])
-            # Half-open interval overlap: [start, end)
-            if start_d < other_end and end_d > other_start:
-                raise HTTPException(
-                    400,
-                    f"Date range overlaps with slot {row['slot_num']} ({row['start_date']}..{row['end_date']})",
-                )
+        if not force:
+            overlaps = conn.execute(
+                _q(
+                    "SELECT slot_num, start_date, end_date FROM rotation_period_ranges "
+                    "WHERE slot_num <> ?"
+                ),
+                (slot_num,),
+            ).fetchall()
+            for row in overlaps:
+                other_start = date.fromisoformat(row["start_date"])
+                other_end = date.fromisoformat(row["end_date"])
+                # Half-open interval overlap: [start, end)
+                if start_d < other_end and end_d > other_start:
+                    raise HTTPException(
+                        400,
+                        f"Date range overlaps with slot {row['slot_num']} ({row['start_date']}..{row['end_date']})",
+                    )
 
         conn.execute(
             _q(
