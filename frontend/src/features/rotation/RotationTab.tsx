@@ -130,6 +130,7 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
   const [newPeriodEnd, setNewPeriodEnd] = useState(dateInputValue(period.end));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [overlapWarn, setOverlapWarn] = useState("");
 
   const handleSave = async () => {
     if (!newPeriodStart || !newPeriodEnd) {
@@ -148,13 +149,12 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
       const otherEnd = new Date(`${p.end_date}T00:00:00`).getTime();
       return nextStart < otherEnd && nextEnd > otherStart;
     });
-    if (overlapping) {
-      setError(`הטווח חופף לתקופה ${overlapping.slot_num + 1}: ${overlapping.start_date} עד ${overlapping.end_date}`);
+    if (overlapping && !overlapWarn) {
+      // Show warning but allow user to confirm and save anyway
+      setOverlapWarn(`הטווח חופף לתקופה ${overlapping.slot_num + 1}: ${overlapping.start_date} עד ${overlapping.end_date}. לחץ שמור שוב לאישור.`);
       return;
     }
-    const message = `לעדכן את טווח החופשה של ${period.periodLabel} ל-${newPeriodStart} עד ${newPeriodEnd}?`;
-    if (!window.confirm(message)) return;
-
+    setOverlapWarn("");
     setSaving(true);
     setError("");
     try {
@@ -204,6 +204,11 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
           <div className="text-xs text-text-dim bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
             השינוי נשמר בנפרד לתקופה זו בלבד.
           </div>
+          {overlapWarn && (
+            <div className="text-warning text-sm bg-warning/10 border border-warning/30 rounded-xl p-3">
+              ⚠ {overlapWarn}
+            </div>
+          )}
           {error && (
             <div className="text-danger text-sm bg-danger/10 border border-danger/30 rounded-xl p-3">
               {error}
@@ -212,7 +217,7 @@ function EditPeriodRangeModal({ config, period, onClose, onSaved }: EditPeriodRa
         </div>
         <div className="p-5 border-t border-bg-border shrink-0">
           <button onClick={handleSave} disabled={saving} className="btn-primary w-full">
-            {saving ? "שומר..." : "אישור ועדכון טווח"}
+            {saving ? "שומר..." : overlapWarn ? "שמור בכל זאת" : "אישור ועדכון טווח"}
           </button>
         </div>
       </div>
@@ -489,9 +494,23 @@ async function parseImportFile(
   if (data.length < 2) throw new Error("הקובץ ריק או לא תקין");
 
   const headerRow = data[0];
-  // Map column index → slotIndex (null if unmatched)
+  // Map column index → slotIndex
+  // Strategy: date-label match first; if no periods stored in DB (config.periods empty),
+  // fall back to column-position mapping (col 1 → slot 0, col 2 → slot 1, …)
+  const useFallback = !periods.some((p) => {
+    // check if any header matches — if none match, use positional fallback
+    for (let ci = 1; ci < headerRow.length; ci++) {
+      if (matchPeriodByHeader(String(headerRow[ci]), periods)) return true;
+    }
+    return false;
+  });
   const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
     if (ci === 0) return null;
+    if (useFallback) {
+      // positional: column 1 → slot 0, column 2 → slot 1, …
+      const slotIdx = ci - 1;
+      return slotIdx < periods.length ? slotIdx : null;
+    }
     const match = matchPeriodByHeader(String(h), periods);
     return match ? match.slotIndex : null;
   });
@@ -648,6 +667,8 @@ export default function RotationTab() {
   const [editRangePeriod, setEditRangePeriod] = useState<Period | null>(null);
   const [duplicateSourcePeriod, setDuplicateSourcePeriod] = useState<Period | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showAddWeekModal, setShowAddWeekModal] = useState(false);
+  const [addWeekCount, setAddWeekCount] = useState(3);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -695,13 +716,14 @@ export default function RotationTab() {
     }
   };
 
-  const handleAddWeek = async () => {
+  const handleAddWeek = async (periodsPerWeek: number) => {
     if (!config) return;
+    setShowAddWeekModal(false);
     setAddingWeek(true);
     try {
       const maxRoleSlots = config.roles.reduce((max, role) => Math.max(max, role.slots.length), 0);
       const currentPeriods = Math.max(9, config.periods?.length ?? 0, maxRoleSlots);
-      const nextPeriods = currentPeriods + 3;
+      const nextPeriods = currentPeriods + periodsPerWeek;
 
       for (const role of config.roles) {
         const newSlots = Array.from({ length: nextPeriods }, (_, i) => role.slots[i] ?? []);
@@ -815,7 +837,7 @@ export default function RotationTab() {
                   {!readOnly && (
                     <>
                       <button
-                        onClick={() => { setShowActionsMenu(false); handleAddWeek(); }}
+                        onClick={() => { setShowActionsMenu(false); setAddWeekCount(3); setShowAddWeekModal(true); }}
                         disabled={addingWeek}
                         className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
                                    hover:bg-bg-base/60 transition-colors disabled:opacity-50 flex items-center gap-2 justify-end"
@@ -1110,6 +1132,58 @@ export default function RotationTab() {
       {/* Sync result modal */}
       {syncResult && (
         <SyncModal result={syncResult} onClose={() => setSyncResult(null)} />
+      )}
+
+      {/* Add week modal */}
+      {showAddWeekModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={() => setShowAddWeekModal(false)}>
+          <div
+            className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in max-w-2xl mx-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-bg-border">
+              <h2 className="font-bold text-text text-lg">הוספת שבוע — בחר מספר תקופות</h2>
+              <button onClick={() => setShowAddWeekModal(false)} className="text-text-dim hover:text-text text-xl px-2">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="text-xs text-text-dim bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
+                כמה slot (תקופות) להוסיף לשבוע?
+              </div>
+              {[
+                { count: 2, label: "2 תקופות", desc: "3+4 ימים לשבוע" },
+                { count: 3, label: "3 תקופות", desc: "2+2+3 ימים לשבוע (ברירת מחדל)" },
+                { count: 1, label: "תקופה אחת", desc: "שבוע שלם — 7 ימים" },
+              ].map(({ count, label, desc }) => (
+                <label
+                  key={count}
+                  className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-all
+                    ${addWeekCount === count ? "border-primary/50 bg-primary/10" : "border-bg-border bg-bg-base/30 hover:bg-bg-base/60"}`}
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-text">{label}</div>
+                    <div className="text-xs text-text-dim">{desc}</div>
+                  </div>
+                  <input
+                    type="radio"
+                    name="addWeekCount"
+                    checked={addWeekCount === count}
+                    onChange={() => setAddWeekCount(count)}
+                    className="accent-primary w-4 h-4"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="px-5 pb-2">
+              <button
+                onClick={() => handleAddWeek(addWeekCount)}
+                disabled={addingWeek}
+                className="btn-primary w-full"
+              >
+                {addingWeek ? "מוסיף..." : `הוסף ${addWeekCount} תקופות`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Import preview / confirm modal */}
