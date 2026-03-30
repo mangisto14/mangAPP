@@ -496,12 +496,7 @@ async function parseImportFile(
   if (data.length < 2) throw new Error("הקובץ ריק או לא תקין");
 
   const headerRow = data[0];
-  // Map column index → slotIndex
-  // Strategy: date-label match first; if no periods stored in DB (config.periods empty),
-  // fall back to column-position mapping (col 1 → slot 0, col 2 → slot 1, …)
-  // If no header matches any period by date, fall back to column-position mapping
-  const anyHeaderMatches = headerRow.slice(1).some((h) => !!matchPeriodByHeader(String(h), periods));
-  const useFallback = !anyHeaderMatches;
+
   // Parse "29/3-1/4" → { start: "YYYY-03-29", end: "YYYY-04-01" } using current year
   function parseHeaderRange(label: string): { start: string; end: string } | null {
     const trimmed = label.trim();
@@ -509,40 +504,33 @@ async function parseImportFile(
     if (slashIdx < 0) return null;
     const dashIdx = trimmed.indexOf("-", slashIdx);
     if (dashIdx < 0) return null;
-    const startPart = trimmed.substring(0, dashIdx);
-    const endPart = trimmed.substring(dashIdx + 1);
-    const s = parseDayMonth(startPart);
-    const e = parseDayMonth(endPart);
+    const s = parseDayMonth(trimmed.substring(0, dashIdx));
+    const e = parseDayMonth(trimmed.substring(dashIdx + 1));
     if (!s || !e) return null;
     const year = new Date().getFullYear();
     const pad = (n: number) => String(n).padStart(2, "0");
-    // handle year boundary: if end month < start month, end is next year
-    const startYear = year;
     const endYear = e.month < s.month ? year + 1 : year;
     return {
-      start: `${startYear}-${pad(s.month)}-${pad(s.day)}`,
+      start: `${year}-${pad(s.month)}-${pad(s.day)}`,
       end: `${endYear}-${pad(e.month)}-${pad(e.day)}`,
     };
   }
 
+  // Always use positional mapping: column 1 → slot 0, column 2 → slot 1, …
+  // This is reliable regardless of whether periods exist in DB or not.
   const periodRanges = new Map<number, { start: string; end: string }>();
-  const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
+  const numDataCols = headerRow.length - 1; // exclude role-name column
+  const colToSlot: (number | null)[] = headerRow.map((_h, ci) => {
     if (ci === 0) return null;
-    let slotIdx: number | null;
-    if (useFallback) {
-      slotIdx = ci - 1 < periods.length ? ci - 1 : null;
-    } else {
-      const match = matchPeriodByHeader(String(h), periods);
-      slotIdx = match ? match.slotIndex : null;
-    }
-    // Collect date range from header regardless of match strategy
-    if (slotIdx !== null) {
-      const range = parseHeaderRange(String(h));
-      if (range) periodRanges.set(slotIdx, range);
-    }
-    return slotIdx;
+    return ci - 1; // slot index = column index - 1
   });
-  const matchedPeriods = colToSlot.filter((s) => s !== null).length;
+  const matchedPeriods = numDataCols;
+
+  // Parse date ranges from each column header
+  for (let ci = 1; ci < headerRow.length; ci++) {
+    const range = parseHeaderRange(String(headerRow[ci]));
+    if (range) periodRanges.set(ci - 1, range);
+  }
 
   const roleMap = new Map(config.roles.map((r) => [r.name.trim(), r]));
   const roleSlots = new Map<number, Map<number, string[]>>(
