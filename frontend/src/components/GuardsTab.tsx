@@ -97,7 +97,7 @@ export default function GuardsTab() {
     setPendingDelete(null);
   };
 
-  const setField = (id: number, field: keyof EditState, value: string) =>
+  const setField = <K extends keyof EditState>(id: number, field: K, value: EditState[K]) =>
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 
   const overloaded = guards.filter((g) => g.overloaded && g.is_active);
