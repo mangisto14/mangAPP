@@ -846,8 +846,10 @@ export default function RotationTab() {
   if (loading) return <SkeletonRotation />;
   if (error || !config) return <div className="fade-in card border-danger/30 text-danger">{error || "שגיאה"}</div>;
 
-  const numPeriods = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0);
-  const periods = computePeriods(config, numPeriods);
+  const numPeriods = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0,
+    config.roles.reduce((m, r) => Math.max(m, r.slots.length), 0));
+  const periods = computePeriods(config, numPeriods)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
   const activePeriod = periods.find((p) => p.isActive);
   const activeIdx = periods.findIndex((p) => p.isActive);
   const nextPeriodIdx = activeIdx >= 0 && activeIdx + 1 < periods.length ? activeIdx + 1 : -1;
@@ -1175,7 +1177,7 @@ export default function RotationTab() {
       {editSlot !== null && (
         <EditPeriodModal
           config={config}
-          period={periods[editSlot]}
+          period={periods.find((p) => p.slotIndex === editSlot)!}
           guardNames={guardNames}
           guards={guards}
           onClose={() => setEditSlot(null)}
