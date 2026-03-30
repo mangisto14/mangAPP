@@ -540,7 +540,7 @@ async function parseImportFile(
     slotsMap: roleSlots.get(r.id)!,
   }));
 
-  return { roles, periodRanges, matchedPeriods, totalPeriods: periods.length };
+  return { roles, periodRanges, matchedPeriods, totalPeriods: numDataCols };
 }
 
 async function applyImport(preview: ImportPreview, config: RotationConfig) {
@@ -745,8 +745,6 @@ export default function RotationTab() {
     const file = e.target.files?.[0];
     if (!file || !config) return;
     e.target.value = "";
-    const numP = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0);
-    const currentPeriods = computePeriods(config, numP);
     try {
       const preview = await parseImportFile(file, config);
       setImportPreview(preview);
