@@ -458,35 +458,9 @@ function parseDayMonth(s: string): { day: number; month: number } | null {
   return { day, month };
 }
 
-// Extract the start portion from a label like "29/3-1/4"
-function headerStartDate(label: string): { day: number; month: number } | null {
-  const trimmed = label.trim();
-  // find the dash that separates start from end (not a slash-internal dash)
-  // the start part ends at the first '-' after the first '/'
-  const slashIdx = trimmed.indexOf("/");
-  if (slashIdx < 0) return null;
-  const dashIdx = trimmed.indexOf("-", slashIdx);
-  if (dashIdx < 0) return null;
-  return parseDayMonth(trimmed.substring(0, dashIdx));
-}
-
-function matchPeriodByHeader(h: string, periods: Period[]): Period | undefined {
-  const label = String(h).trim();
-  // 1. Exact label match (fastest)
-  const exact = periods.find((p) => p.label === label);
-  if (exact) return exact;
-  // 2. Match by start day/month extracted from header string
-  const hStart = headerStartDate(label);
-  if (!hStart) return undefined;
-  return periods.find(
-    (p) => p.start.getDate() === hStart.day && p.start.getMonth() + 1 === hStart.month
-  );
-}
-
 async function parseImportFile(
   file: File,
-  config: RotationConfig,
-  periods: Period[]
+  config: RotationConfig
 ): Promise<ImportPreview> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
@@ -774,7 +748,7 @@ export default function RotationTab() {
     const numP = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0);
     const currentPeriods = computePeriods(config, numP);
     try {
-      const preview = await parseImportFile(file, config, currentPeriods);
+      const preview = await parseImportFile(file, config);
       setImportPreview(preview);
     } catch (err) {
       alert((err as Error).message);
