@@ -453,7 +453,7 @@ export default function ShiftsTab() {
                 <button
                   onClick={handleWhatsApp}
                   className="flex items-center gap-1.5 bg-success/10 hover:bg-success/20 text-success
-                             border border-success/30 px-3 py-1.5 rounded-r-none rounded-l-xl text-sm font-semibold transition-all border-l"
+                             border border-success/30 border-l-0 px-3 py-1.5 rounded-r-xl rounded-l-none text-sm font-semibold transition-all"
                 >
                   <MessageCircle size={15} />
                   שלח
@@ -461,7 +461,7 @@ export default function ShiftsTab() {
                 <button
                   onClick={() => setShowWaMenu((v) => !v)}
                   className="flex items-center bg-success/10 hover:bg-success/20 text-success
-                             border border-success/30 border-r px-2 rounded-l-none rounded-r-xl text-sm transition-all"
+                             border border-success/30 px-2 rounded-l-xl rounded-r-none text-sm transition-all"
                   aria-label="תבניות WhatsApp"
                 >
                   <ChevronDown size={13} className={`transition-transform ${showWaMenu ? "rotate-180" : ""}`} />
@@ -470,7 +470,7 @@ export default function ShiftsTab() {
               {showWaMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowWaMenu(false)} />
-                  <div className="absolute left-0 top-full mt-1 bg-bg-card border border-bg-border
+                  <div className="absolute right-0 top-full mt-1 bg-bg-card border border-bg-border
                                   rounded-xl shadow-lg z-20 min-w-[130px] overflow-hidden scale-in">
                     {[
                       { id: "all" as const,      label: "כל המשמרות" },
