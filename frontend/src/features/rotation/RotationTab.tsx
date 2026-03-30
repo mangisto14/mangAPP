@@ -442,6 +442,8 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
 
 interface ImportPreview {
   roles: { id: number; name: string; slotsMap: Map<number, string[]> }[];
+  // slotIndex → { start, end } parsed from file headers
+  periodRanges: Map<number, { start: string; end: string }>;
   matchedPeriods: number;
   totalPeriods: number;
 }
@@ -500,15 +502,45 @@ async function parseImportFile(
   // If no header matches any period by date, fall back to column-position mapping
   const anyHeaderMatches = headerRow.slice(1).some((h) => !!matchPeriodByHeader(String(h), periods));
   const useFallback = !anyHeaderMatches;
+  // Parse "29/3-1/4" → { start: "YYYY-03-29", end: "YYYY-04-01" } using current year
+  function parseHeaderRange(label: string): { start: string; end: string } | null {
+    const trimmed = label.trim();
+    const slashIdx = trimmed.indexOf("/");
+    if (slashIdx < 0) return null;
+    const dashIdx = trimmed.indexOf("-", slashIdx);
+    if (dashIdx < 0) return null;
+    const startPart = trimmed.substring(0, dashIdx);
+    const endPart = trimmed.substring(dashIdx + 1);
+    const s = parseDayMonth(startPart);
+    const e = parseDayMonth(endPart);
+    if (!s || !e) return null;
+    const year = new Date().getFullYear();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    // handle year boundary: if end month < start month, end is next year
+    const startYear = year;
+    const endYear = e.month < s.month ? year + 1 : year;
+    return {
+      start: `${startYear}-${pad(s.month)}-${pad(s.day)}`,
+      end: `${endYear}-${pad(e.month)}-${pad(e.day)}`,
+    };
+  }
+
+  const periodRanges = new Map<number, { start: string; end: string }>();
   const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
     if (ci === 0) return null;
+    let slotIdx: number | null;
     if (useFallback) {
-      // positional: column 1 → slot 0, column 2 → slot 1, …
-      const slotIdx = ci - 1;
-      return slotIdx < periods.length ? slotIdx : null;
+      slotIdx = ci - 1 < periods.length ? ci - 1 : null;
+    } else {
+      const match = matchPeriodByHeader(String(h), periods);
+      slotIdx = match ? match.slotIndex : null;
     }
-    const match = matchPeriodByHeader(String(h), periods);
-    return match ? match.slotIndex : null;
+    // Collect date range from header regardless of match strategy
+    if (slotIdx !== null) {
+      const range = parseHeaderRange(String(h));
+      if (range) periodRanges.set(slotIdx, range);
+    }
+    return slotIdx;
   });
   const matchedPeriods = colToSlot.filter((s) => s !== null).length;
 
@@ -546,10 +578,11 @@ async function parseImportFile(
     slotsMap: roleSlots.get(r.id)!,
   }));
 
-  return { roles, matchedPeriods, totalPeriods: periods.length };
+  return { roles, periodRanges, matchedPeriods, totalPeriods: periods.length };
 }
 
 async function applyImport(preview: ImportPreview, config: RotationConfig) {
+  // 1. Write guard names per slot for every role
   for (const { id, slotsMap } of preview.roles) {
     const role = config.roles.find((r) => r.id === id);
     if (!role) continue;
@@ -561,6 +594,15 @@ async function applyImport(preview: ImportPreview, config: RotationConfig) {
       slotsMap.has(i) ? slotsMap.get(i)! : (role.slots[i] ?? [])
     );
     await updateRotationSlots(id, newSlots);
+  }
+
+  // 2. Save period date ranges parsed from file headers
+  //    Only overwrite periods that don't already have a custom range in DB
+  const existingSlots = new Set((config.periods ?? []).map((p) => p.slot_num));
+  for (const [slotIdx, { start, end }] of preview.periodRanges.entries()) {
+    if (!existingSlots.has(slotIdx)) {
+      await updateRotationPeriod(slotIdx, start, end);
+    }
   }
 }
 
