@@ -441,6 +441,41 @@ interface ImportPreview {
   totalPeriods: number;
 }
 
+// Parse "29/3" → { day:29, month:3 } or null
+function parseDayMonth(s: string): { day: number; month: number } | null {
+  const parts = s.trim().split("/");
+  if (parts.length !== 2) return null;
+  const day = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  if (isNaN(day) || isNaN(month)) return null;
+  return { day, month };
+}
+
+// Extract the start portion from a label like "29/3-1/4"
+function headerStartDate(label: string): { day: number; month: number } | null {
+  const trimmed = label.trim();
+  // find the dash that separates start from end (not a slash-internal dash)
+  // the start part ends at the first '-' after the first '/'
+  const slashIdx = trimmed.indexOf("/");
+  if (slashIdx < 0) return null;
+  const dashIdx = trimmed.indexOf("-", slashIdx);
+  if (dashIdx < 0) return null;
+  return parseDayMonth(trimmed.substring(0, dashIdx));
+}
+
+function matchPeriodByHeader(h: string, periods: Period[]): Period | undefined {
+  const label = String(h).trim();
+  // 1. Exact label match (fastest)
+  const exact = periods.find((p) => p.label === label);
+  if (exact) return exact;
+  // 2. Match by start day/month extracted from header string
+  const hStart = headerStartDate(label);
+  if (!hStart) return undefined;
+  return periods.find(
+    (p) => p.start.getDate() === hStart.day && p.start.getMonth() + 1 === hStart.month
+  );
+}
+
 async function parseImportFile(
   file: File,
   config: RotationConfig,
@@ -457,12 +492,12 @@ async function parseImportFile(
   // Map column index → slotIndex (null if unmatched)
   const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
     if (ci === 0) return null;
-    const match = periods.find((p) => p.label === String(h).trim());
+    const match = matchPeriodByHeader(String(h), periods);
     return match ? match.slotIndex : null;
   });
   const matchedPeriods = colToSlot.filter((s) => s !== null).length;
 
-  const roleMap = new Map(config.roles.map((r) => [r.name, r]));
+  const roleMap = new Map(config.roles.map((r) => [r.name.trim(), r]));
   const roleSlots = new Map<number, Map<number, string[]>>(
     config.roles.map((r) => [r.id, new Map()])
   );
@@ -472,7 +507,9 @@ async function parseImportFile(
     const row = data[ri];
     const roleCell = String(row[0] ?? "").trim();
     if (roleCell) {
-      const role = roleMap.get(roleCell);
+      // Try exact match first, then case-insensitive
+      const role = roleMap.get(roleCell) ??
+        [...roleMap.entries()].find(([k]) => k.toLowerCase() === roleCell.toLowerCase())?.[1];
       currentRoleId = role ? role.id : null;
     }
     if (currentRoleId === null) continue;
