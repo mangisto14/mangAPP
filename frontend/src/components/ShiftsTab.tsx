@@ -6,6 +6,7 @@ import AddShiftTab from "./AddShiftTab";
 import EditShiftModal from "./EditShiftModal";
 import { SkeletonShiftCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
+import { copyText } from "../utils/clipboard";
 
 const SWIPE_THRESHOLD = 72;
 
@@ -297,7 +298,7 @@ export default function ShiftsTab() {
   const handleCopy = async () => {
     const { text } = await getWhatsapp();
     if (!text) { alert("אין משמרות עתידיות להעתיק"); return; }
-    await navigator.clipboard.writeText(text);
+    await copyText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

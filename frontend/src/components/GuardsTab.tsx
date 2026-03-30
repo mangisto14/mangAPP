@@ -4,6 +4,7 @@ import { getGuards, addGuards, updateGuard, deleteGuard } from "../api";
 import type { Guard } from "../types";
 import { SkeletonGuardCards } from "./Skeleton";
 import { useReadOnly } from "../hooks/useReadOnly";
+import { copyText } from "../utils/clipboard";
 
 interface EditState {
   name: string;
@@ -181,7 +182,7 @@ export default function GuardsTab() {
                 className="text-xs text-text-dim hover:text-primary px-2 py-1 rounded-lg hover:bg-primary/10 transition-colors"
                 onClick={() => {
                   const csv = guards.map((g) => g.name).join(", ");
-                  navigator.clipboard.writeText(csv).then(() => showToast("📋 הועתק ללוח"));
+                  copyText(csv).then(() => showToast("📋 הועתק ללוח"));
                 }}
                 title="ייצא רשימה"
               >

@@ -13,6 +13,7 @@ import { computePeriods } from "../rotation/utils";
 import { SkeletonAbsenceCards, SkeletonTableRows } from "../../components/Skeleton";
 import { useReadOnly } from "../../hooks/useReadOnly";
 import { usePushNotifications } from "../../hooks/usePushNotifications";
+import { copyText } from "../../utils/clipboard";
 
 
 const REASONS = ["רופא", "מחלה", "חופשה", "אישי", "אחר"];
@@ -227,7 +228,7 @@ function CopyNamesButton({ names }: { names: string[] }) {
   const [copied, setCopied] = useState(false);
   if (!names.length) return null;
   const handleCopy = () => {
-    navigator.clipboard.writeText(names.join(", "));
+    copyText(names.join(", "));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
