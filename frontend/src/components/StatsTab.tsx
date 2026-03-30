@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Download, ChevronDown, ChevronUp } from "lucide-react";
-import { getStats } from "../api";
-import { getShifts } from "../api";
-import type { Stats, Shift } from "../types";
+import { AlertTriangle, Download, ChevronDown, ChevronUp, X } from "lucide-react";
+import { getStats, getShifts } from "../api";
+import type { Stats, Shift, GuardStat } from "../types";
 import { SkeletonStatCards } from "./Skeleton";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -136,6 +135,150 @@ function BarChart({ buckets }: { buckets: { label: string; count: number }[] }) 
   );
 }
 
+// ── Guard Shifts Bottom Sheet ─────────────────────────────────────────────────
+
+const HE_DAY_SHORT: Record<string, string> = {
+  Sunday: "א׳", Monday: "ב׳", Tuesday: "ג׳", Wednesday: "ד׳",
+  Thursday: "ה׳", Friday: "ו׳", Saturday: "ש׳",
+};
+
+function fmtShiftDate(iso: string): string {
+  const d = new Date(iso);
+  const day = HE_DAY_SHORT[d.toLocaleDateString("en-US", { weekday: "long" })] ?? "";
+  return `${day} ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+}
+
+function fmtShiftTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+
+function GuardShiftsSheet({
+  guard,
+  allShifts,
+  onClose,
+}: {
+  guard: GuardStat;
+  allShifts: Shift[];
+  onClose: () => void;
+}) {
+  const guardShifts = allShifts
+    .filter((s) => s.names.includes(guard.name))
+    .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+
+  const future = guardShifts.filter((s) => !s.is_past);
+  const past   = guardShifts.filter((s) => s.is_past);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 flex items-end"
+      onClick={onClose}
+      aria-hidden="true"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`משמרות ${guard.name}`}
+        className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl
+                   pb-8 slide-in max-w-2xl mx-auto max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-bg-border shrink-0">
+          <div>
+            <h2 className="font-bold text-text text-lg">{guard.name}</h2>
+            <div className="flex gap-2 mt-1">
+              <span className="pill-past">✅ {guard.past} עבר</span>
+              <span className="pill-future">🕐 {guard.future} עתידי</span>
+              <span className="text-xs bg-bg-hover text-text-muted px-2 py-0.5 rounded-full font-semibold">
+                סה״כ {guard.total}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="סגור"
+            className="p-2 text-text-dim hover:text-text rounded-xl hover:bg-bg-base transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Shifts list */}
+        <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4">
+          {guardShifts.length === 0 && (
+            <p className="text-center text-text-dim py-8 text-sm">אין משמרות</p>
+          )}
+
+          {/* Future */}
+          {future.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-warning uppercase tracking-wide mb-2">
+                🕐 עתידיות ({future.length})
+              </p>
+              <div className="space-y-2">
+                {future.map((s) => {
+                  const coWorkers = s.names.filter((n) => n !== guard.name);
+                  return (
+                    <div key={s.id} className="flex items-start gap-3 bg-warning/5 border border-warning/20 rounded-xl px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-text-muted">{fmtShiftDate(s.start_time)}</p>
+                        <p className="text-sm font-bold text-text tabular-nums">
+                          {fmtShiftTime(s.start_time)} – {fmtShiftTime(s.end_time)}
+                        </p>
+                        {coWorkers.length > 0 && (
+                          <p className="text-xs text-text-dim mt-0.5 truncate">
+                            עם: {coWorkers.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-warning bg-warning/10 border border-warning/25 px-2 py-0.5 rounded-full shrink-0 font-semibold">
+                        {((new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000).toFixed(1)}ש׳
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Past */}
+          {past.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-success uppercase tracking-wide mb-2">
+                ✅ עבר ({past.length})
+              </p>
+              <div className="space-y-2">
+                {past.map((s) => {
+                  const coWorkers = s.names.filter((n) => n !== guard.name);
+                  return (
+                    <div key={s.id} className="flex items-start gap-3 bg-bg-base border border-bg-border rounded-xl px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-text-muted">{fmtShiftDate(s.start_time)}</p>
+                        <p className="text-sm font-bold text-text tabular-nums">
+                          {fmtShiftTime(s.start_time)} – {fmtShiftTime(s.end_time)}
+                        </p>
+                        {coWorkers.length > 0 && (
+                          <p className="text-xs text-text-dim mt-0.5 truncate">
+                            עם: {coWorkers.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs text-text-dim bg-bg-hover border border-bg-border px-2 py-0.5 rounded-full shrink-0 font-semibold">
+                        {((new Date(s.end_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000).toFixed(1)}ש׳
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function StatsTab() {
@@ -144,9 +287,10 @@ export default function StatsTab() {
   const [loading, setLoading] = useState(true);
   const [chartView, setChartView] = useState<"weekly" | "monthly">("weekly");
   const [showInactive, setShowInactive] = useState(false);
+  const [selectedGuard, setSelectedGuard] = useState<GuardStat | null>(null);
 
   useEffect(() => {
-    Promise.all([getStats(), getShifts("past")])
+    Promise.all([getStats(), getShifts("all")])
       .then(([s, sh]) => { setStats(s); setShifts(sh); })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -166,6 +310,13 @@ export default function StatsTab() {
 
   return (
     <div className="fade-in space-y-4">
+      {selectedGuard && (
+        <GuardShiftsSheet
+          guard={selectedGuard}
+          allShifts={shifts}
+          onClose={() => setSelectedGuard(null)}
+        />
+      )}
       {/* ── Summary ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
         {[
@@ -286,17 +437,19 @@ export default function StatsTab() {
         {stats.guards.length === 0 && (
           <p className="text-text-dim text-sm text-center py-4">אין נתונים</p>
         )}
+        <p className="text-[10px] text-text-dim text-center -mt-1">לחץ על שומר לצפייה במשמרות</p>
         <div className="space-y-2 max-h-[460px] overflow-y-auto">
           {stats.guards.map((g, i) => {
             const barWidth = Math.round((g.total / maxTotal) * 100);
             const pastPct = g.total > 0 ? Math.round((g.past / g.total) * 100) : 0;
             const futurePct = 100 - pastPct;
             return (
-              <div
+              <button
                 key={g.name}
-                className={`p-3 rounded-xl border transition-all ${
-                  i < 3 ? RANK_BG[i] : "border-bg-border bg-bg-base"
-                }`}
+                onClick={() => setSelectedGuard(g)}
+                className={`w-full text-right p-3 rounded-xl border transition-all active:scale-[0.98]
+                  hover:border-primary/40 hover:shadow-sm
+                  ${i < 3 ? RANK_BG[i] : "border-bg-border bg-bg-base"}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -331,7 +484,7 @@ export default function StatsTab() {
                     <div style={{ width: `${futurePct}%` }} className="bg-warning/60 h-full" />
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
