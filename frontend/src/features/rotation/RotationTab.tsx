@@ -440,10 +440,16 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
 
 // ── importFromExcel ───────────────────────────────────────────────────────────
 
+interface OverlapWarning {
+  slotA: number; labelA: string;
+  slotB: number; labelB: string;
+  source: "file" | "db"; // "file" = both from import, "db" = conflicts existing DB period
+}
+
 interface ImportPreview {
   roles: { id: number; name: string; slotsMap: Map<number, string[]> }[];
-  // slotIndex → { start, end } parsed from file headers
   periodRanges: Map<number, { start: string; end: string }>;
+  overlaps: OverlapWarning[];
   matchedPeriods: number;
   totalPeriods: number;
 }
@@ -540,7 +546,44 @@ async function parseImportFile(
     slotsMap: roleSlots.get(r.id)!,
   }));
 
-  return { roles, periodRanges, matchedPeriods, totalPeriods: numDataCols };
+  // Detect overlaps: [s1,e1) vs [s2,e2) overlap when s1 < e2 AND e1 > s2
+  function rangesOverlap(s1: string, e1: string, s2: string, e2: string) {
+    return s1 < e2 && e1 > s2;
+  }
+  function fmtSlot(slotIdx: number) {
+    const r = periodRanges.get(slotIdx);
+    return r ? `${r.start.slice(5).replace("-", "/")}–${r.end.slice(5).replace("-", "/")}` : `slot ${slotIdx + 1}`;
+  }
+
+  const overlaps: OverlapWarning[] = [];
+  const fileEntries = Array.from(periodRanges.entries());
+
+  // Check within-file overlaps
+  for (let i = 0; i < fileEntries.length; i++) {
+    for (let j = i + 1; j < fileEntries.length; j++) {
+      const [slotA, rA] = fileEntries[i];
+      const [slotB, rB] = fileEntries[j];
+      if (rangesOverlap(rA.start, rA.end, rB.start, rB.end)) {
+        overlaps.push({ slotA, labelA: fmtSlot(slotA), slotB, labelB: fmtSlot(slotB), source: "file" });
+      }
+    }
+  }
+
+  // Check against existing DB periods
+  for (const [slotIdx, range] of fileEntries) {
+    for (const dbPeriod of config.periods ?? []) {
+      if (dbPeriod.slot_num === slotIdx) continue; // same slot — will be overwritten
+      if (rangesOverlap(range.start, range.end, dbPeriod.start_date, dbPeriod.end_date)) {
+        overlaps.push({
+          slotA: slotIdx, labelA: fmtSlot(slotIdx),
+          slotB: dbPeriod.slot_num, labelB: `${dbPeriod.start_date.slice(5).replace("-", "/")}–${dbPeriod.end_date.slice(5).replace("-", "/")}`,
+          source: "db",
+        });
+      }
+    }
+  }
+
+  return { roles, periodRanges, overlaps, matchedPeriods, totalPeriods: numDataCols };
 }
 
 async function applyImport(preview: ImportPreview, config: RotationConfig) {
@@ -1291,9 +1334,18 @@ export default function RotationTab() {
                 })}
               </div>
 
-              {importPreview.matchedPeriods < importPreview.totalPeriods && (
-                <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-xl p-3">
-                  ⚠ {importPreview.totalPeriods - importPreview.matchedPeriods} תקופות לא זוהו בקובץ — הנתונים הקיימים בתקופות אלו לא ישתנו.
+              {importPreview.overlaps.length > 0 && (
+                <div className="text-xs bg-warning/10 border border-warning/30 rounded-xl p-3 space-y-1.5">
+                  <div className="font-bold text-warning flex items-center gap-1.5">
+                    ⚠ {importPreview.overlaps.length} חפיפות תאריכים נמצאו
+                  </div>
+                  {importPreview.overlaps.map((o, i) => (
+                    <div key={i} className="text-warning/80">
+                      {o.source === "db" ? "קובץ" : "קובץ"} slot {o.slotA + 1} ({o.labelA})
+                      {" "}חופף ל{o.source === "db" ? "DB" : "קובץ"} slot {o.slotB + 1} ({o.labelB})
+                    </div>
+                  ))}
+                  <div className="text-text-dim pt-1">ניתן לאשר בכל זאת — הייבוא ידרוס את התקופות הקיימות.</div>
                 </div>
               )}
 
