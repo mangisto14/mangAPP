@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown, Copy } from "lucide-react";
+import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown, FileUp, Copy } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import {
   getRotation,
@@ -433,6 +433,85 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
   }
 }
 
+// ── importFromExcel ───────────────────────────────────────────────────────────
+
+interface ImportPreview {
+  roles: { id: number; name: string; slotsMap: Map<number, string[]> }[];
+  matchedPeriods: number;
+  totalPeriods: number;
+}
+
+async function parseImportFile(
+  file: File,
+  config: RotationConfig,
+  periods: Period[]
+): Promise<ImportPreview> {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as string[][];
+
+  if (data.length < 2) throw new Error("הקובץ ריק או לא תקין");
+
+  const headerRow = data[0];
+  // Map column index → slotIndex (null if unmatched)
+  const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
+    if (ci === 0) return null;
+    const match = periods.find((p) => `${p.label} ${p.periodLabel}` === String(h).trim());
+    return match ? match.slotIndex : null;
+  });
+  const matchedPeriods = colToSlot.filter((s) => s !== null).length;
+
+  const roleMap = new Map(config.roles.map((r) => [r.name, r]));
+  const roleSlots = new Map<number, Map<number, string[]>>(
+    config.roles.map((r) => [r.id, new Map()])
+  );
+
+  let currentRoleId: number | null = null;
+  for (let ri = 1; ri < data.length; ri++) {
+    const row = data[ri];
+    const roleCell = String(row[0] ?? "").trim();
+    if (roleCell) {
+      const role = roleMap.get(roleCell);
+      currentRoleId = role ? role.id : null;
+    }
+    if (currentRoleId === null) continue;
+    const slotsForRole = roleSlots.get(currentRoleId)!;
+    for (let ci = 1; ci < headerRow.length; ci++) {
+      const slotIdx = colToSlot[ci];
+      if (slotIdx === null) continue;
+      const name = String(row[ci] ?? "").trim();
+      if (name) {
+        if (!slotsForRole.has(slotIdx)) slotsForRole.set(slotIdx, []);
+        slotsForRole.get(slotIdx)!.push(name);
+      }
+    }
+  }
+
+  const roles = config.roles.map((r) => ({
+    id: r.id,
+    name: r.name,
+    slotsMap: roleSlots.get(r.id)!,
+  }));
+
+  return { roles, matchedPeriods, totalPeriods: periods.length };
+}
+
+async function applyImport(preview: ImportPreview, config: RotationConfig) {
+  for (const { id, slotsMap } of preview.roles) {
+    const role = config.roles.find((r) => r.id === id);
+    if (!role) continue;
+    const maxSlot = Math.max(
+      role.slots.length - 1,
+      ...Array.from(slotsMap.keys())
+    );
+    const newSlots = Array.from({ length: maxSlot + 1 }, (_, i) =>
+      slotsMap.has(i) ? slotsMap.get(i)! : (role.slots[i] ?? [])
+    );
+    await updateRotationSlots(id, newSlots);
+  }
+}
+
 // ── SyncModal ──────────────────────────────────────────────────────────────────
 
 function SyncModal({ result, onClose }: { result: SyncResult; onClose: () => void }) {
@@ -532,6 +611,9 @@ export default function RotationTab() {
   const [editRangePeriod, setEditRangePeriod] = useState<Period | null>(null);
   const [duplicateSourcePeriod, setDuplicateSourcePeriod] = useState<Period | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
   const activePeriodRef = useRef<HTMLTableCellElement>(null);
   const readOnly = useReadOnly();
 
@@ -597,6 +679,34 @@ export default function RotationTab() {
     }
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !config) return;
+    e.target.value = "";
+    const numP = Math.max(9 + extraWeeks * 3, config.periods?.length ?? 0);
+    const currentPeriods = computePeriods(config, numP);
+    try {
+      const preview = await parseImportFile(file, config, currentPeriods);
+      setImportPreview(preview);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importPreview || !config) return;
+    setImporting(true);
+    try {
+      await applyImport(importPreview, config);
+      setImportPreview(null);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   useEffect(() => { load(); }, []);
   useEffect(() => {
     if (!loading && activePeriodRef.current) {
@@ -629,6 +739,15 @@ export default function RotationTab() {
 
   return (
     <div className="fade-in space-y-4">
+      {/* Hidden file input for import */}
+      <input
+        ref={importRef}
+        type="file"
+        accept=".xlsx"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         {activePeriod ? (
@@ -706,6 +825,16 @@ export default function RotationTab() {
                     ייצוא
                     <FileDown size={13} />
                   </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => { setShowActionsMenu(false); importRef.current?.click(); }}
+                      className="w-full text-right px-4 py-2.5 text-sm text-text-dim hover:text-text
+                                 hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
+                    >
+                      ייבוא
+                      <FileUp size={13} />
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -944,6 +1073,87 @@ export default function RotationTab() {
       {/* Sync result modal */}
       {syncResult && (
         <SyncModal result={syncResult} onClose={() => setSyncResult(null)} />
+      )}
+
+      {/* Import preview / confirm modal */}
+      {importPreview && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={() => setImportPreview(null)}>
+          <div
+            className="w-full bg-bg-card border-t border-bg-border rounded-t-2xl pb-8 slide-in
+                       max-w-2xl mx-auto max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-bg-border shrink-0">
+              <h2 className="font-bold text-text text-lg">אישור ייבוא סבב חופשה</h2>
+              <button onClick={() => setImportPreview(null)} className="text-text-dim hover:text-text text-xl px-2">✕</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {/* Summary */}
+              <div className="flex gap-3 flex-wrap">
+                <div className="card flex-1 text-center">
+                  <div className="text-2xl font-bold text-primary">{importPreview.matchedPeriods}</div>
+                  <div className="text-xs text-text-dim mt-0.5">תקופות זוהו</div>
+                </div>
+                <div className="card flex-1 text-center">
+                  <div className="text-2xl font-bold text-primary">{importPreview.roles.length}</div>
+                  <div className="text-xs text-text-dim mt-0.5">תפקידים</div>
+                </div>
+                <div className="card flex-1 text-center">
+                  <div className="text-2xl font-bold text-primary">
+                    {importPreview.roles.reduce((sum, r) => {
+                      let names = 0;
+                      r.slotsMap.forEach((arr) => { names += arr.length; });
+                      return sum + names;
+                    }, 0)}
+                  </div>
+                  <div className="text-xs text-text-dim mt-0.5">שיבוצים</div>
+                </div>
+              </div>
+
+              {/* Per-role preview */}
+              <div className="space-y-2">
+                {importPreview.roles.map((r) => {
+                  const totalNames = Array.from(r.slotsMap.values()).reduce((s, a) => s + a.length, 0);
+                  return (
+                    <div key={r.id} className="flex items-center justify-between bg-bg-base/40 border border-bg-border rounded-xl px-3 py-2">
+                      <span className="text-sm font-semibold text-text">{r.name}</span>
+                      <span className="text-xs text-text-dim">
+                        {totalNames} שיבוצים ב-{r.slotsMap.size} תקופות
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {importPreview.matchedPeriods < importPreview.totalPeriods && (
+                <div className="text-xs text-warning bg-warning/10 border border-warning/25 rounded-xl p-3">
+                  ⚠ {importPreview.totalPeriods - importPreview.matchedPeriods} תקופות לא זוהו בקובץ — הנתונים הקיימים בתקופות אלו לא ישתנו.
+                </div>
+              )}
+
+              <div className="text-xs text-text-dim bg-primary/10 border border-primary/20 rounded-xl px-3 py-2">
+                הייבוא יחליף את שמות השומרים בתקופות שזוהו. פעולה זו אינה ניתנת לביטול.
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-bg-border shrink-0 flex gap-3">
+              <button
+                onClick={() => setImportPreview(null)}
+                className="flex-1 btn-secondary"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                disabled={importing}
+                className="flex-1 btn-primary"
+              >
+                {importing ? "מייבא..." : "אישור ייבוא"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
