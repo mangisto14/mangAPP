@@ -376,7 +376,7 @@ function exportToExcel(config: RotationConfig, periods: Period[]) {
     border,
   });
   periods.forEach((p, ci) => {
-    setCell(0, ci + 1, `${p.label} ${p.periodLabel}`, headerStyle(PERIOD_EXCEL_COLORS[p.periodIndex].header));
+    setCell(0, ci + 1, p.label, headerStyle(PERIOD_EXCEL_COLORS[p.periodIndex].header));
   });
 
   // Data rows — one row per guard, role cell merged vertically
@@ -457,7 +457,7 @@ async function parseImportFile(
   // Map column index → slotIndex (null if unmatched)
   const colToSlot: (number | null)[] = headerRow.map((h, ci) => {
     if (ci === 0) return null;
-    const match = periods.find((p) => `${p.label} ${p.periodLabel}` === String(h).trim());
+    const match = periods.find((p) => p.label === String(h).trim());
     return match ? match.slotIndex : null;
   });
   const matchedPeriods = colToSlot.filter((s) => s !== null).length;
