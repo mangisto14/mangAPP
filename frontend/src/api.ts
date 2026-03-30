@@ -18,7 +18,12 @@ async function req<T>(
 }
 
 // Guards
-export const getGuards = () => req<Guard[]>("/guards");
+export const getGuards = (includeInactive = false) => {
+  const params = new URLSearchParams();
+  if (includeInactive) params.set("include_inactive", "true");
+  const query = params.toString();
+  return req<Guard[]>(query ? `/guards?${query}` : "/guards");
+};
 export const addGuards = (names: string[]) =>
   req<{ added: string[]; skipped: string[] }>("/guards", {
     method: "POST",
@@ -29,10 +34,16 @@ export const updateGuard = (
   name: string,
   phone?: string | null,
   role?: string | null,
+  isActive?: boolean,
 ) =>
   req<{ ok: boolean }>(`/guards/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ name, phone: phone ?? null, role: role ?? null }),
+    body: JSON.stringify({
+      name,
+      phone: phone ?? null,
+      role: role ?? null,
+      ...(typeof isActive === "boolean" ? { is_active: isActive } : {}),
+    }),
   });
 export const deleteGuard = (id: number) =>
   req<{ ok: boolean }>(`/guards/${id}`, { method: "DELETE" });
