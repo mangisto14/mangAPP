@@ -244,7 +244,7 @@ export default function GuardsTab() {
                   />
                   <div className="flex gap-1 shrink-0 items-center">
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0
-                      ${g.is_active ? "bg-success/15 text-success" : "bg-bg-hover text-text-dim"}`}>
+                      ${g.is_active ? "bg-success/15 text-success" : "bg-danger/15 text-danger"}`}>
                       {g.is_active ? "פעיל" : "לא פעיל"}
                     </span>
                     <span className="pill-past">✅ {g.past}</span>
