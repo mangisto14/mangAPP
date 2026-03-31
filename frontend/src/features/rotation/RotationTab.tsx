@@ -48,7 +48,7 @@ function EditPeriodModal({ config, period, guardNames, guards, onClose, onSaved 
     setError("");
     try {
       for (const role of config.roles) {
-        const needed = Math.max(9, period.slotIndex + 1);
+        const needed = Math.max(role.slots.length, 9, period.slotIndex + 1);
         const newSlots = Array.from({ length: needed }, (_, i) => role.slots[i] ?? []);
         newSlots[period.slotIndex] = (values[role.id] ?? "")
           .split(",")
@@ -253,13 +253,14 @@ function DuplicatePeriodModal({ config, sourcePeriod, periods, onClose, onSaved 
       return;
     }
 
+    const sourceNum = periods.findIndex((p) => p.slotIndex === sourcePeriod.slotIndex) + 1;
     const targetLabels = targetPeriods
       .filter((p) => selectedTargets.includes(p.slotIndex))
-      .map((p) => `${p.slotIndex + 1} (${p.periodLabel})`)
+      .map((p) => `${periods.findIndex((x) => x.slotIndex === p.slotIndex) + 1} (${p.periodLabel})`)
       .join(", ");
 
     const ok = window.confirm(
-      `לשכפל את תקופה ${sourcePeriod.slotIndex + 1} (${sourcePeriod.periodLabel}) לתקופות: ${targetLabels}?`
+      `לשכפל את תקופה ${sourceNum} (${sourcePeriod.periodLabel}) לתקופות: ${targetLabels}?`
     );
     if (!ok) return;
 
@@ -296,7 +297,7 @@ function DuplicatePeriodModal({ config, sourcePeriod, periods, onClose, onSaved 
       >
         <div className="flex items-center justify-between p-5 border-b border-bg-border shrink-0">
           <h2 className="font-bold text-text text-lg">
-            שכפול תקופה {sourcePeriod.slotIndex + 1} · {sourcePeriod.periodLabel}
+            שכפול תקופה {periods.findIndex((p) => p.slotIndex === sourcePeriod.slotIndex) + 1} · {sourcePeriod.periodLabel}
           </h2>
           <button onClick={onClose} className="text-text-dim hover:text-text text-xl px-2">✕</button>
         </div>
@@ -316,7 +317,7 @@ function DuplicatePeriodModal({ config, sourcePeriod, periods, onClose, onSaved 
                     ${checked ? "border-primary/40 bg-primary/10" : "border-bg-border bg-bg-base/30 hover:bg-bg-base/60"}`}
                 >
                   <div className="text-sm text-text">
-                    תקופה {p.slotIndex + 1} · {p.label} · {p.periodLabel}
+                    תקופה {periods.findIndex((x) => x.slotIndex === p.slotIndex) + 1} · {p.label} · {p.periodLabel}
                   </div>
                   <input
                     type="checkbox"
