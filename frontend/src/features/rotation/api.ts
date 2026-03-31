@@ -17,6 +17,11 @@ export async function updateRotationConfig(start_date: string, period_days: numb
   if (!r.ok) throw new Error("Failed to update rotation config");
 }
 
+export async function clearAllRotationSlots() {
+  const r = await fetch(`${BASE}/rotation/slots/all`, { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to clear rotation slots");
+}
+
 export async function deleteRotationPeriod(slotNum: number) {
   const r = await fetch(`${BASE}/rotation/periods/${slotNum}`, { method: "DELETE" });
   if (!r.ok) throw new Error("Failed to delete period");

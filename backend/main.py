@@ -1517,6 +1517,14 @@ def update_rotation_period(slot_num: int, body: RotationPeriodUpdateBody, force:
     return {"ok": True}
 
 
+@app.delete("/api/rotation/slots/all")
+def clear_all_rotation_slots():
+    """Clear all guard assignments from all slots (keeps roles and period ranges)."""
+    with get_conn() as conn:
+        conn.execute(_q("DELETE FROM rotation_slots"))
+    return {"ok": True}
+
+
 @app.delete("/api/rotation/periods/{slot_num}")
 def delete_rotation_period(slot_num: int):
     if slot_num < 0:

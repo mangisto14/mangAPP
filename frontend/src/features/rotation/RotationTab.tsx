@@ -8,6 +8,7 @@ import {
   syncScheduleGuards,
   updateRotationPeriod,
   deleteRotationPeriod,
+  clearAllRotationSlots,
 } from "./api";
 import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
@@ -267,7 +268,7 @@ function DuplicatePeriodModal({ config, sourcePeriod, periods, onClose, onSaved 
     try {
       for (const role of config.roles) {
         const needed = Math.max(
-          9,
+          role.slots.length,          // preserve ALL existing slots
           sourcePeriod.slotIndex + 1,
           ...selectedTargets.map((slot) => slot + 1)
         );
@@ -981,6 +982,24 @@ export default function RotationTab() {
                       ייבוא
                       <FileUp size={13} />
                     </button>
+                  )}
+                  {!readOnly && (
+                    <>
+                      <div className="border-t border-bg-border/50" />
+                      <button
+                        onClick={async () => {
+                          setShowActionsMenu(false);
+                          if (!confirm("האם למחוק את כל נתוני השיבוצים? פעולה זו אינה הפיכה.")) return;
+                          await clearAllRotationSlots();
+                          await load();
+                        }}
+                        className="w-full text-right px-4 py-2.5 text-sm text-error/80 hover:text-error
+                                   hover:bg-bg-base/60 transition-colors flex items-center gap-2 justify-end"
+                      >
+                        נקה שיבוצים
+                        <Trash2 size={13} />
+                      </button>
+                    </>
                   )}
                 </div>
               </>
