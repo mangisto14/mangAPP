@@ -1517,6 +1517,26 @@ def update_rotation_period(slot_num: int, body: RotationPeriodUpdateBody, force:
     return {"ok": True}
 
 
+@app.delete("/api/rotation/periods/{slot_num}")
+def delete_rotation_period(slot_num: int):
+    if slot_num < 0:
+        raise HTTPException(400, "slot_num must be >= 0")
+    with get_conn() as conn:
+        # Remove this slot's date range and guard assignments
+        conn.execute(_q("DELETE FROM rotation_period_ranges WHERE slot_num = ?"), (slot_num,))
+        conn.execute(_q("DELETE FROM rotation_slots WHERE slot_num = ?"), (slot_num,))
+        # Shift every slot after the deleted one down by 1
+        conn.execute(
+            _q("UPDATE rotation_period_ranges SET slot_num = slot_num - 1 WHERE slot_num > ?"),
+            (slot_num,),
+        )
+        conn.execute(
+            _q("UPDATE rotation_slots SET slot_num = slot_num - 1 WHERE slot_num > ?"),
+            (slot_num,),
+        )
+    return {"ok": True}
+
+
 @app.post("/api/rotation/roles", status_code=201)
 def add_rotation_role(body: RotationRoleCreateBody):
     with get_conn() as conn:

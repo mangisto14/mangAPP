@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown, FileUp, Copy } from "lucide-react";
+import { Pencil, Settings, PlusCircle, MinusCircle, RefreshCw, ChevronDown, CalendarDays, FileDown, FileUp, Copy, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
 import {
   getRotation,
@@ -7,6 +7,7 @@ import {
   syncRotationGuards,
   syncScheduleGuards,
   updateRotationPeriod,
+  deleteRotationPeriod,
 } from "./api";
 import type { SyncResult } from "./api";
 import { getGuards } from "../../api";
@@ -1107,6 +1108,17 @@ export default function RotationTab() {
                           title="שכפל תקופה"
                         >
                           <Copy size={10} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`למחוק את תקופה ${p.label}? הפעולה תמחק את כל השיבוצים ותזיז את שאר התקופות.`)) return;
+                            try { await deleteRotationPeriod(p.slotIndex); load(); }
+                            catch (e) { alert((e as Error).message); }
+                          }}
+                          className="p-0.5 text-text-dim/40 hover:text-danger transition-colors"
+                          title="מחק תקופה"
+                        >
+                          <Trash2 size={10} />
                         </button>
                       </div>
                     )}
