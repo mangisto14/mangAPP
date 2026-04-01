@@ -263,7 +263,7 @@ def migrate_all_from_supabase(force: bool = False) -> dict:
                 log.error("  %s: insert failed – %s", table, e)
                 conn.rollback()
                 summary[table] = f"insert error: {e}"
-        total = sum(v for v in summary.values() if v > 0)
+        total = sum(v for v in summary.values() if isinstance(v, int) and v > 0)
         log.info("Full migration complete: %d total rows → %s", total, main_db)
         return summary
     finally:
