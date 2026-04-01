@@ -2,19 +2,19 @@
 backup_manager.py
 -----------------
 Hybrid data infrastructure:
-  1. init_schema()         – create SQLite tables if absent
-  2. sync_from_supabase()  – one-time migration: Supabase → SQLite
-  3. maybe_migrate()       – run sync only when local DB is empty (startup)
-  4. run_backup()          – export shifts CSV → send to Telegram
-  5. start/stop_scheduler()– APScheduler background thread (03:00 UTC daily)
+  1. init_schema()              – ensure /app/data dir exists
+  2. sync_from_supabase()       – one-time migration: Supabase → backup SQLite
+  3. maybe_migrate()            – run sync only when backup DB is empty
+  4. migrate_all_from_supabase()– one-time full migration to main guard_system.db
+  5. run_backup()               – export shifts CSV → send to Telegram
+  6. start/stop_scheduler()     – APScheduler background thread (03:00 UTC daily)
 
 Env-vars required
 -----------------
-  DB_PATH                 (default /app/data/database.db)
-  SUPABASE_URL            https://<project>.supabase.co
-  SUPABASE_SERVICE_ROLE_KEY  eyJ...
-  TELEGRAM_TOKEN          123456789:ABCdef...
-  CHAT_ID                 -1001234567890
+  SUPABASE_URL                 https://<project>.supabase.co
+  SUPABASE_SERVICE_ROLE_KEY    eyJ...
+  TELEGRAM_TOKEN               123456789:ABCdef...
+  CHAT_ID                      -1001234567890
 """
 
 import csv
@@ -154,6 +154,112 @@ def maybe_migrate() -> None:
         log.error("Error: Supabase fetch failed – %s", e)
     except Exception as e:  # noqa: BLE001
         log.error("Error: migration unexpected failure – %s", e)
+
+# ── Full Supabase → guard_system.db migration ────────────────────────────────
+
+# Tables in dependency order (parents before children)
+_TABLES = [
+    "guards",
+    "settings",
+    "shifts",
+    "absences",
+    "rotation_config",
+    "rotation_roles",
+    "rotation_slots",
+    "rotation_period_ranges",
+]
+
+
+def _main_db_path() -> str:
+    """Mirror main.py db_path() logic."""
+    volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if volume:
+        return os.path.join(volume, "guard_system.db")
+    if os.path.exists("/app/data"):
+        return "/app/data/guard_system.db"
+    return "guard_system.db"
+
+
+def _fetch_table(table: str) -> list[dict]:
+    """Fetch all rows from a Supabase table via REST API (paginated)."""
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Accept": "application/json",
+        "Prefer": "count=none",
+    }
+    rows: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/{table}",
+            headers={**headers, "Range": f"{offset}-{offset + page_size - 1}", "Range-Unit": "items"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        page = resp.json()
+        if not page:
+            break
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return rows
+
+
+def migrate_all_from_supabase() -> None:
+    """
+    One-time full migration: pull every table from Supabase → guard_system.db.
+    Safe to call on startup — skips if guards table already has data.
+    Call this only when IS_PG=False (SQLite mode).
+    """
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        log.info("Supabase env-vars not set – skipping full migration.")
+        return
+
+    main_db = _main_db_path()
+    conn = sqlite3.connect(main_db)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Skip if guards table already has data
+        count = conn.execute("SELECT COUNT(*) FROM guards").fetchone()[0]
+        if count > 0:
+            log.info("guard_system.db already has %d guards – skipping migration.", count)
+            return
+    except sqlite3.OperationalError:
+        log.info("guards table not found yet – proceeding with migration after init_db.")
+        conn.close()
+        return
+
+    log.info("Starting full migration from Supabase → %s ...", main_db)
+    total = 0
+    try:
+        for table in _TABLES:
+            try:
+                rows = _fetch_table(table)
+                if not rows:
+                    log.info("  %s: 0 rows (skipped)", table)
+                    continue
+                cols = list(rows[0].keys())
+                col_names = ", ".join(f'"{c}"' for c in cols)
+                placeholders = ", ".join("?" * len(cols))
+                conn.executemany(
+                    f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})",
+                    [tuple(row.get(c) for c in cols) for row in rows],
+                )
+                conn.commit()
+                log.info("  %s: %d rows imported.", table, len(rows))
+                total += len(rows)
+            except requests.RequestException as e:
+                log.error("  %s: fetch failed – %s", table, e)
+            except sqlite3.Error as e:
+                log.error("  %s: insert failed – %s", table, e)
+                conn.rollback()
+        log.info("Full migration complete: %d total rows → %s", total, main_db)
+    finally:
+        conn.close()
+
 
 # ── Backup engine ─────────────────────────────────────────────────────────────
 
