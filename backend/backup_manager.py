@@ -52,18 +52,8 @@ def get_conn() -> sqlite3.Connection:
 
 
 def init_schema() -> None:
-    """Create tables if they don't exist yet (idempotent)."""
+    """Ensure the data directory exists. Tables are created by main.py init_db()."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    with get_conn() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS shifts (
-                id          INTEGER PRIMARY KEY,
-                guard_name  TEXT    NOT NULL,
-                shift_date  TEXT    NOT NULL,
-                shift_type  TEXT    NOT NULL,
-                notes       TEXT    DEFAULT ''
-            );
-        """)
     log.info("Schema initialised (or already exists).")
 
 
@@ -127,6 +117,16 @@ def sync_from_supabase() -> int:
     col_names = ", ".join(cols)
 
     with get_conn() as conn:
+        # Ensure every Supabase column exists in local table
+        existing = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(shifts)").fetchall()
+        }
+        for col in cols:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE shifts ADD COLUMN {col} TEXT")
+                log.info("Added missing column '%s' to shifts.", col)
+
         conn.executemany(
             f"INSERT OR REPLACE INTO shifts ({col_names}) VALUES ({placeholders})",
             [tuple(row.get(c) for c in cols) for row in rows],
