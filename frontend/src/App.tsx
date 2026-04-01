@@ -134,7 +134,13 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const add = () =>
-    setThresholds((prev) => [...prev, { minutes: 30, level: "warning" }]);
+    setThresholds((prev) => {
+      const usedLevels = new Set(prev.map((t) => t.level));
+      const nextLevel = (["warning", "danger", "critical"] as AlertThreshold["level"][])
+        .find((l) => !usedLevels.has(l));
+      if (!nextLevel) return prev; // all 3 types already added
+      return [...prev, { minutes: 30, level: nextLevel }];
+    });
 
   const remove = (i: number) =>
     setThresholds((prev) => prev.filter((_, idx) => idx !== i));
@@ -169,7 +175,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm font-semibold text-text">ספי התראה לפי זמן בחוץ</p>
               <p className="text-xs text-text-dim mt-0.5">כל ספ משנה צבע את שורת השומר</p>
             </div>
-            <button onClick={add} className="btn-ghost text-xs px-3 py-1.5">+ הוסף</button>
+            <button
+              onClick={add}
+              disabled={thresholds.length >= 3}
+              className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >+ הוסף</button>
           </div>
 
           {thresholds.length === 0 ? (
@@ -191,7 +201,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => update(i, { level: e.target.value as AlertThreshold["level"] })}
                     className="input flex-1 text-sm"
                   >
-                    {LEVEL_OPTIONS.map((l) => (
+                    {LEVEL_OPTIONS.filter(
+                      (l) => l === t.level || !thresholds.some((x, xi) => xi !== i && x.level === l)
+                    ).map((l) => (
                       <option key={l} value={l}>{LEVEL_LABELS[l]}</option>
                     ))}
                   </select>

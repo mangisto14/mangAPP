@@ -287,19 +287,18 @@ export default function AbsencesTab() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [load]);
 
-  // Fire push notifications when guards cross alert thresholds
+  // Fire push notifications ONLY for critical threshold
   useEffect(() => {
     if (!pushEnabled || !settings.alert_thresholds.length) return;
     absences.filter((a) => a.is_out && a.left_at).forEach((a) => {
       const level = getAlertLevel(a.left_at!, settings.alert_thresholds);
-      if (!level) return;
+      if (level !== "critical") return;
       const key = `${a.guard_id}-${level}`;
       if (notifiedRef.current.has(key)) return;
       notifiedRef.current.add(key);
-      const labels: Record<string, string> = { warning: "אזהרה", danger: "סכנה", critical: "קריטי" };
       notify(
-        `⚠️ ${labels[level] ?? level} – מצבת כוח`,
-        `${a.name} מחוץ למסגרת זמן ממושך`,
+        `🔴 קריטי – מצבת כוח`,
+        `${a.name} מחוץ למסגרת זמן קריטי`,
         key
       );
     });
@@ -416,6 +415,11 @@ export default function AbsencesTab() {
   const insideNotInRotation = filteredInside.filter((a) => !rotationNamesNow.has(a.name));
 
   const alertOut = out.filter((a) => a.left_at && getAlertLevel(a.left_at, settings.alert_thresholds) !== null);
+  const dangerOut = out.filter((a) => {
+    if (!a.left_at) return false;
+    const lvl = getAlertLevel(a.left_at, settings.alert_thresholds);
+    return lvl === "danger" || lvl === "critical";
+  });
 
   // derive bulk action counts
   const selectedOutCount = [...selectedIds].filter((id) => out.some((a) => a.guard_id === id)).length;
@@ -469,12 +473,28 @@ export default function AbsencesTab() {
             <div className="card border-danger/40 bg-danger/10 text-danger text-sm">{error}</div>
           )}
 
-          {/* Alert banner */}
-          {alertOut.length > 0 && (
-            <div className="card border-danger/40 bg-danger/10 slide-in">
-              <p className="text-danger text-sm font-semibold">
-                ⚠️ {alertOut.map((a) => a.name).join(", ")} — חרגו מסף ההתראה!
-              </p>
+          {/* Danger section — guards at danger/critical level */}
+          {dangerOut.length > 0 && (
+            <div className="card border-orange-400/40 bg-orange-400/10 slide-in">
+              <h3 className="font-bold text-sm text-orange-400 flex items-center gap-2 mb-2">
+                🚨 חריגת סף סכנה
+                <span className="bg-orange-400/20 text-orange-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {dangerOut.length}
+                </span>
+              </h3>
+              <ul className="space-y-1.5">
+                {dangerOut.map((a) => {
+                  const lvl = getAlertLevel(a.left_at!, settings.alert_thresholds);
+                  return (
+                    <li key={a.guard_id} className="flex items-center justify-between gap-2">
+                      <span className={`text-sm font-semibold ${lvl === "critical" ? "text-danger" : "text-orange-400"}`}>
+                        {lvl === "critical" ? "🔴" : "🟠"} {a.name}
+                      </span>
+                      {a.left_at && <Clock leftAt={a.left_at} level={lvl} />}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 
