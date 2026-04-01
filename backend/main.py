@@ -1353,10 +1353,14 @@ def history_csv(
 @app.post("/api/admin/sync-from-supabase")
 def sync_from_supabase_endpoint(force: bool = True):
     """Force re-sync all tables from Supabase → database.db."""
-    summary = migrate_all_from_supabase(force=force)
-    if not summary:
-        return {"ok": False, "message": "Supabase env-vars not set or migration skipped"}
-    return {"ok": True, "summary": summary}
+    import traceback
+    try:
+        summary = migrate_all_from_supabase(force=force)
+        if not summary:
+            return {"ok": False, "message": "Supabase env-vars not set or migration skipped"}
+        return {"ok": True, "summary": summary}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
 
 
 @app.post("/api/admin/seed-absences", status_code=201)
