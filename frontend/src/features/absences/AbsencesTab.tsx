@@ -414,7 +414,6 @@ export default function AbsencesTab() {
   const insideInRotation = filteredInside.filter((a) => rotationNamesNow.has(a.name));
   const insideNotInRotation = filteredInside.filter((a) => !rotationNamesNow.has(a.name));
 
-  const alertOut = out.filter((a) => a.left_at && getAlertLevel(a.left_at, settings.alert_thresholds) !== null);
   const dangerOut = out.filter((a) => {
     if (!a.left_at) return false;
     const lvl = getAlertLevel(a.left_at, settings.alert_thresholds);
