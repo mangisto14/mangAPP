@@ -1350,6 +1350,15 @@ def history_csv(
     )
 
 
+@app.post("/api/admin/sync-from-supabase")
+def sync_from_supabase_endpoint(force: bool = True):
+    """Force re-sync all tables from Supabase → database.db."""
+    summary = migrate_all_from_supabase(force=force)
+    if not summary:
+        return {"ok": False, "message": "Supabase env-vars not set or migration skipped"}
+    return {"ok": True, "summary": summary}
+
+
 @app.post("/api/admin/seed-absences", status_code=201)
 def seed_absences(body: SeedAbsencesBody):
     with get_conn() as conn:

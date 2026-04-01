@@ -208,38 +208,38 @@ def _fetch_table(table: str) -> list[dict]:
     return rows
 
 
-def migrate_all_from_supabase() -> None:
+def migrate_all_from_supabase(force: bool = False) -> dict:
     """
-    One-time full migration: pull every table from Supabase → guard_system.db.
-    Safe to call on startup — skips if guards table already has data.
-    Call this only when IS_PG=False (SQLite mode).
+    Full migration: pull every table from Supabase → database.db.
+    Skips if guards table already has data, unless force=True.
+    Returns summary dict with row counts per table.
     """
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         log.info("Supabase env-vars not set – skipping full migration.")
-        return
+        return {}
 
     main_db = _main_db_path()
     conn = sqlite3.connect(main_db)
     conn.row_factory = sqlite3.Row
     try:
-        # Skip if guards table already has data
         count = conn.execute("SELECT COUNT(*) FROM guards").fetchone()[0]
-        if count > 0:
-            log.info("guard_system.db already has %d guards – skipping migration.", count)
-            return
+        if count > 0 and not force:
+            log.info("database.db already has %d guards – skipping migration (use force=True to override).", count)
+            return {}
     except sqlite3.OperationalError:
-        log.info("guards table not found yet – proceeding with migration after init_db.")
+        log.info("guards table not found yet – will run after init_db.")
         conn.close()
-        return
+        return {}
 
-    log.info("Starting full migration from Supabase → %s ...", main_db)
-    total = 0
+    log.info("Starting full migration from Supabase → %s (force=%s)...", main_db, force)
+    summary: dict[str, int] = {}
     try:
         for table in _TABLES:
             try:
                 rows = _fetch_table(table)
                 if not rows:
                     log.info("  %s: 0 rows (skipped)", table)
+                    summary[table] = 0
                     continue
                 cols = list(rows[0].keys())
                 col_names = ", ".join(f'"{c}"' for c in cols)
@@ -250,13 +250,17 @@ def migrate_all_from_supabase() -> None:
                 )
                 conn.commit()
                 log.info("  %s: %d rows imported.", table, len(rows))
-                total += len(rows)
+                summary[table] = len(rows)
             except requests.RequestException as e:
                 log.error("  %s: fetch failed – %s", table, e)
+                summary[table] = -1
             except sqlite3.Error as e:
                 log.error("  %s: insert failed – %s", table, e)
                 conn.rollback()
+                summary[table] = -1
+        total = sum(v for v in summary.values() if v > 0)
         log.info("Full migration complete: %d total rows → %s", total, main_db)
+        return summary
     finally:
         conn.close()
 
