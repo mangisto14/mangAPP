@@ -11,7 +11,7 @@ from datetime import datetime, date, timedelta
 from contextlib import contextmanager
 import os, urllib.parse, csv, io, logging, traceback
 
-from backend.backup_manager import init_schema, start_scheduler, stop_scheduler
+from backend.backup_manager import init_schema, maybe_migrate, start_scheduler, stop_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("mangapp")
@@ -20,6 +20,7 @@ _log = logging.getLogger("mangapp")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_schema()
+    maybe_migrate()
     start_scheduler()
     yield
     stop_scheduler()
