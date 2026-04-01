@@ -117,18 +117,17 @@ def sync_from_supabase() -> int:
     col_names = ", ".join(cols)
 
     with get_conn() as conn:
-        # Ensure every Supabase column exists in local table
-        existing = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(shifts)").fetchall()
-        }
-        for col in cols:
-            if col not in existing:
-                conn.execute(f"ALTER TABLE shifts ADD COLUMN {col} TEXT")
-                log.info("Added missing column '%s' to shifts.", col)
+        # Rebuild table from Supabase schema (drop + create → always matches source)
+        col_defs = ", ".join(
+            "id INTEGER PRIMARY KEY" if c == "id" else f'"{c}" TEXT'
+            for c in cols
+        )
+        conn.execute("DROP TABLE IF EXISTS shifts")
+        conn.execute(f"CREATE TABLE shifts ({col_defs})")
+        log.info("Recreated shifts table with columns: %s", cols)
 
         conn.executemany(
-            f"INSERT OR REPLACE INTO shifts ({col_names}) VALUES ({placeholders})",
+            f"INSERT INTO shifts ({col_names}) VALUES ({placeholders})",
             [tuple(row.get(c) for c in cols) for row in rows],
         )
 
