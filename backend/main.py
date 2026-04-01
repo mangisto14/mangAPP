@@ -1,5 +1,6 @@
 """מצבת כוח – FastAPI Backend v3"""
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,10 +11,21 @@ from datetime import datetime, date, timedelta
 from contextlib import contextmanager
 import os, urllib.parse, csv, io, logging, traceback
 
+from backend.backup_manager import init_schema, start_scheduler, stop_scheduler
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("mangapp")
 
-app = FastAPI(title="מצבת כוח API", version="3.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_schema()
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+
+app = FastAPI(title="מצבת כוח API", version="3.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
