@@ -1177,7 +1177,7 @@ export default function RotationTab() {
                                 className={`text-xs px-1.5 py-0.5 rounded-lg border font-medium
                                   ${mismatch
                                     ? "bg-warning/10 border-warning/30 text-warning"
-                                    : PERIOD_COLORS[p.periodIndex]
+                                    : PERIOD_COLORS[pi % 3]
                                   }`}
                                 title={mismatch ? `תפקיד אמיתי: ${guardRole || "ללא תפקיד"}` : undefined}
                               >
