@@ -241,9 +241,14 @@ def migrate_all_from_supabase(force: bool = False) -> dict:
                     log.info("  %s: 0 rows (skipped)", table)
                     summary[table] = 0
                     continue
-                cols = list(rows[0].keys())
+                # Keep only columns that exist in local SQLite table
+                local_cols = {
+                    r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                }
+                cols = [c for c in rows[0].keys() if c in local_cols]
                 col_names = ", ".join(f'"{c}"' for c in cols)
                 placeholders = ", ".join("?" * len(cols))
+
                 def _coerce(v):
                     if isinstance(v, bool):
                         return int(v)
