@@ -734,7 +734,7 @@ except Exception:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def compute_stats(now: datetime) -> dict:
     with get_conn() as conn:
-        guards = conn.execute("SELECT name FROM guards").fetchall()
+        guards = conn.execute("SELECT name FROM guards WHERE is_active = 1").fetchall()
         shifts = conn.execute("SELECT names,start_time,end_time FROM shifts").fetchall()
 
     stats: dict = {
