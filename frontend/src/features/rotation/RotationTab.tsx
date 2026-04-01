@@ -1154,7 +1154,7 @@ export default function RotationTab() {
                 <td className="py-2 px-3 font-bold text-text text-xs sticky right-0 bg-bg-deep z-10">
                   {role.name}
                 </td>
-                {periods.map((p) => {
+                {periods.map((p, pi) => {
                   const names = role.slots[p.slotIndex] ?? [];
                   return (
                     <td
