@@ -95,10 +95,10 @@ class PgConn:
 def db_path() -> str:
     volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
     if volume_path:
-        return os.path.join(volume_path, "guard_system.db")
+        return os.path.join(volume_path, "database.db")
     if os.path.exists("/app/data"):
-        return "/app/data/guard_system.db"
-    return "guard_system.db"
+        return "/app/data/database.db"
+    return "database.db"
 
 
 @contextmanager

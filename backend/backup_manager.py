@@ -174,10 +174,10 @@ def _main_db_path() -> str:
     """Mirror main.py db_path() logic."""
     volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
     if volume:
-        return os.path.join(volume, "guard_system.db")
+        return os.path.join(volume, "database.db")
     if os.path.exists("/app/data"):
-        return "/app/data/guard_system.db"
-    return "guard_system.db"
+        return "/app/data/database.db"
+    return "database.db"
 
 
 def _fetch_table(table: str) -> list[dict]:
