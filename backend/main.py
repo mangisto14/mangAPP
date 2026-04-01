@@ -1168,7 +1168,7 @@ def update_settings(body: SettingsBody):
 @app.get("/api/absences")
 def list_absences():
     with get_conn() as conn:
-        guards = conn.execute("SELECT * FROM guards ORDER BY name").fetchall()
+        guards = conn.execute("SELECT * FROM guards WHERE is_active = 1 ORDER BY name").fetchall()
         open_absences = conn.execute(
             "SELECT * FROM absences WHERE returned_at IS NULL"
         ).fetchall()
