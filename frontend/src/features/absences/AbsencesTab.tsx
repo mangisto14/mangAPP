@@ -416,7 +416,7 @@ export default function AbsencesTab() {
 
   const dangerOut = out.filter((a) => {
     if (!a.left_at) return false;
-    if (a.reason === "רופא" || a.reason === "מחלה") return false;
+    if (a.reason === "חופשה" || a.reason === "מחלה") return false;
     const lvl = getAlertLevel(a.left_at, settings.alert_thresholds);
     return lvl === "danger" || lvl === "critical";
   });
