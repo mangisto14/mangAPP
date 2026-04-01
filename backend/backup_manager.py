@@ -244,20 +244,25 @@ def migrate_all_from_supabase(force: bool = False) -> dict:
                 cols = list(rows[0].keys())
                 col_names = ", ".join(f'"{c}"' for c in cols)
                 placeholders = ", ".join("?" * len(cols))
+                def _coerce(v):
+                    if isinstance(v, bool):
+                        return int(v)
+                    return v
+
                 conn.executemany(
                     f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})",
-                    [tuple(row.get(c) for c in cols) for row in rows],
+                    [tuple(_coerce(row.get(c)) for c in cols) for row in rows],
                 )
                 conn.commit()
                 log.info("  %s: %d rows imported.", table, len(rows))
                 summary[table] = len(rows)
             except requests.RequestException as e:
                 log.error("  %s: fetch failed – %s", table, e)
-                summary[table] = -1
+                summary[table] = f"fetch error: {e}"
             except sqlite3.Error as e:
                 log.error("  %s: insert failed – %s", table, e)
                 conn.rollback()
-                summary[table] = -1
+                summary[table] = f"insert error: {e}"
         total = sum(v for v in summary.values() if v > 0)
         log.info("Full migration complete: %d total rows → %s", total, main_db)
         return summary
