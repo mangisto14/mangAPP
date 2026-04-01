@@ -548,7 +548,9 @@ export default function AbsencesTab() {
             ) : (
               <ul className="space-y-3 max-h-80 overflow-y-auto pr-1">
                 {out.map((a) => {
-                  const alertLevel = a.left_at ? getAlertLevel(a.left_at, settings.alert_thresholds) : null;
+                  const rawLevel = a.left_at ? getAlertLevel(a.left_at, settings.alert_thresholds) : null;
+                  const isExempt = a.reason === "חופשה" || a.reason === "מחלה";
+                  const alertLevel = (rawLevel === "warning" || rawLevel === "danger") && isExempt ? null : rawLevel;
                   const checked = selectedIds.has(a.guard_id);
                   return (
                     <li
