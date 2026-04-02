@@ -1,20 +1,15 @@
 """
 backup_manager.py
 -----------------
-Hybrid data infrastructure:
-  1. init_schema()              – ensure /app/data dir exists
-  2. sync_from_supabase()       – one-time migration: Supabase → backup SQLite
-  3. maybe_migrate()            – run sync only when backup DB is empty
-  4. migrate_all_from_supabase()– one-time full migration to main guard_system.db
-  5. run_backup()               – export shifts CSV → send to Telegram
-  6. start/stop_scheduler()     – APScheduler background thread (03:00 UTC daily)
+  1. init_schema()        – ensure /app/data dir exists
+  2. run_backup()         – export all tables → ZIP → Telegram
+  3. start/stop_scheduler() – APScheduler background thread (03:00 UTC daily)
+  4. schedule_test_backup() – one-time test run N minutes from now
 
 Env-vars required
 -----------------
-  SUPABASE_URL                 https://<project>.supabase.co
-  SUPABASE_SERVICE_ROLE_KEY    eyJ...
-  TELEGRAM_TOKEN               123456789:ABCdef...
-  CHAT_ID                      -1001234567890
+  TELEGRAM_TOKEN   123456789:ABCdef...
+  CHAT_ID          -1001234567890
 """
 
 import csv
@@ -32,11 +27,9 @@ from apscheduler.triggers.cron import CronTrigger
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DB_PATH                  = os.getenv("DB_PATH", "/app/data/database.db")
-SUPABASE_URL             = os.getenv("SUPABASE_URL", "")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-TELEGRAM_TOKEN           = os.getenv("TELEGRAM_TOKEN", "")
-CHAT_ID                  = os.getenv("CHAT_ID", "")
+DB_PATH        = os.getenv("DB_PATH", "/app/data/database.db")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+CHAT_ID        = os.getenv("CHAT_ID", "")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,222 +52,6 @@ def init_schema() -> None:
     log.info("Schema initialised (or already exists).")
 
 
-def _shifts_count() -> int:
-    with get_conn() as conn:
-        return conn.execute("SELECT COUNT(*) FROM shifts").fetchone()[0]
-
-# ── Supabase migration ────────────────────────────────────────────────────────
-
-def sync_from_supabase() -> int:
-    """
-    Pull all rows from Supabase `shifts` table and upsert into local SQLite.
-    Returns number of rows written.
-    Uses the Supabase REST API directly (no extra SDK dependency).
-    """
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        raise EnvironmentError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for migration."
-        )
-
-    log.info("Fetching shifts from Supabase...")
-
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Accept": "application/json",
-    }
-
-    # Fetch all rows (Supabase REST default limit is 1000; use range header for >1000)
-    rows: list[dict] = []
-    page_size = 1000
-    offset = 0
-
-    while True:
-        resp = requests.get(
-            f"{SUPABASE_URL}/rest/v1/shifts",
-            headers={
-                **headers,
-                "Range": f"{offset}-{offset + page_size - 1}",
-                "Range-Unit": "items",
-                "Prefer": "count=none",
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        page = resp.json()
-        if not page:
-            break
-        rows.extend(page)
-        if len(page) < page_size:
-            break
-        offset += page_size
-
-    if not rows:
-        log.info("Supabase returned 0 rows.")
-        return 0
-
-    # Detect columns dynamically from first row
-    cols = list(rows[0].keys())
-    placeholders = ", ".join("?" * len(cols))
-    col_names = ", ".join(cols)
-
-    with get_conn() as conn:
-        # Rebuild table from Supabase schema (drop + create → always matches source)
-        col_defs = ", ".join(
-            "id INTEGER PRIMARY KEY" if c == "id" else f'"{c}" TEXT'
-            for c in cols
-        )
-        conn.execute("DROP TABLE IF EXISTS shifts")
-        conn.execute(f"CREATE TABLE shifts ({col_defs})")
-        log.info("Recreated shifts table with columns: %s", cols)
-
-        conn.executemany(
-            f"INSERT INTO shifts ({col_names}) VALUES ({placeholders})",
-            [tuple(row.get(c) for c in cols) for row in rows],
-        )
-
-    log.info("Migration complete: %d rows written to SQLite.", len(rows))
-    return len(rows)
-
-
-def maybe_migrate() -> None:
-    """
-    Run sync_from_supabase() only if the local shifts table is empty.
-    Safe to call on every startup – no-op if data already exists.
-    """
-    try:
-        count = _shifts_count()
-        if count > 0:
-            log.info("SQLite has %d rows – skipping Supabase migration.", count)
-            return
-        log.info("SQLite is empty – starting initial migration from Supabase...")
-        written = sync_from_supabase()
-        log.info("Initial migration done: %d rows imported.", written)
-    except EnvironmentError as e:
-        log.warning("Migration skipped (config missing): %s", e)
-    except requests.RequestException as e:
-        log.error("Error: Supabase fetch failed – %s", e)
-    except Exception as e:  # noqa: BLE001
-        log.error("Error: migration unexpected failure – %s", e)
-
-# ── Full Supabase → guard_system.db migration ────────────────────────────────
-
-# Tables in dependency order (parents before children)
-_TABLES = [
-    "guards",
-    "settings",
-    "shifts",
-    "absences",
-    "rotation_config",
-    "rotation_roles",
-    "rotation_slots",
-    "rotation_period_ranges",
-]
-
-
-def _main_db_path() -> str:
-    """Mirror main.py db_path() logic."""
-    volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
-    if volume:
-        return os.path.join(volume, "database.db")
-    if os.path.exists("/app/data"):
-        return "/app/data/database.db"
-    return "database.db"
-
-
-def _fetch_table(table: str) -> list[dict]:
-    """Fetch all rows from a Supabase table via REST API (paginated)."""
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Accept": "application/json",
-        "Prefer": "count=none",
-    }
-    rows: list[dict] = []
-    page_size = 1000
-    offset = 0
-    while True:
-        resp = requests.get(
-            f"{SUPABASE_URL}/rest/v1/{table}",
-            headers={**headers, "Range": f"{offset}-{offset + page_size - 1}", "Range-Unit": "items"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        page = resp.json()
-        if not page:
-            break
-        rows.extend(page)
-        if len(page) < page_size:
-            break
-        offset += page_size
-    return rows
-
-
-def migrate_all_from_supabase(force: bool = False) -> dict:
-    """
-    Full migration: pull every table from Supabase → database.db.
-    Skips if guards table already has data, unless force=True.
-    Returns summary dict with row counts per table.
-    """
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        log.info("Supabase env-vars not set – skipping full migration.")
-        return {}
-
-    main_db = _main_db_path()
-    conn = sqlite3.connect(main_db)
-    conn.row_factory = sqlite3.Row
-    try:
-        count = conn.execute("SELECT COUNT(*) FROM guards").fetchone()[0]
-        if count > 0 and not force:
-            log.info("database.db already has %d guards – skipping migration (use force=True to override).", count)
-            return {}
-    except sqlite3.OperationalError:
-        log.info("guards table not found yet – will run after init_db.")
-        conn.close()
-        return {}
-
-    log.info("Starting full migration from Supabase → %s (force=%s)...", main_db, force)
-    summary: dict[str, int] = {}
-    try:
-        for table in _TABLES:
-            try:
-                rows = _fetch_table(table)
-                if not rows:
-                    log.info("  %s: 0 rows (skipped)", table)
-                    summary[table] = 0
-                    continue
-                # Keep only columns that exist in local SQLite table
-                local_cols = {
-                    r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()
-                }
-                cols = [c for c in rows[0].keys() if c in local_cols]
-                col_names = ", ".join(f'"{c}"' for c in cols)
-                placeholders = ", ".join("?" * len(cols))
-
-                def _coerce(v):
-                    if isinstance(v, bool):
-                        return int(v)
-                    return v
-
-                conn.executemany(
-                    f"INSERT OR REPLACE INTO {table} ({col_names}) VALUES ({placeholders})",
-                    [tuple(_coerce(row.get(c)) for c in cols) for row in rows],
-                )
-                conn.commit()
-                log.info("  %s: %d rows imported.", table, len(rows))
-                summary[table] = len(rows)
-            except requests.RequestException as e:
-                log.error("  %s: fetch failed – %s", table, e)
-                summary[table] = f"fetch error: {e}"
-            except sqlite3.Error as e:
-                log.error("  %s: insert failed – %s", table, e)
-                conn.rollback()
-                summary[table] = f"insert error: {e}"
-        total = sum(v for v in summary.values() if isinstance(v, int) and v > 0)
-        log.info("Full migration complete: %d total rows → %s", total, main_db)
-        return summary
-    finally:
-        conn.close()
 
 
 # ── Backup engine ─────────────────────────────────────────────────────────────
