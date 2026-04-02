@@ -11,7 +11,7 @@ from datetime import datetime, date, timedelta
 from contextlib import contextmanager
 import os, urllib.parse, csv, io, logging, traceback
 
-from backend.backup_manager import init_schema, maybe_migrate, migrate_all_from_supabase, start_scheduler, stop_scheduler
+from backend.backup_manager import init_schema, maybe_migrate, migrate_all_from_supabase, start_scheduler, stop_scheduler, schedule_test_backup
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 _log = logging.getLogger("mangapp")
@@ -1348,6 +1348,17 @@ def history_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=absences_history.csv"},
     )
+
+
+@app.post("/api/admin/test-backup")
+def test_backup_endpoint(delay_minutes: int = 2):
+    """Schedule a one-time test backup N minutes from now."""
+    import traceback
+    try:
+        scheduled_at = schedule_test_backup(delay_minutes)
+        return {"ok": True, "scheduled_at": scheduled_at, "message": f"גיבוי בדיקה מתוזמן ל-{scheduled_at}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
 
 
 @app.post("/api/admin/sync-from-supabase")

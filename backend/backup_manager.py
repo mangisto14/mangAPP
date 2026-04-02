@@ -18,11 +18,13 @@ Env-vars required
 """
 
 import csv
+import io
 import logging
 import os
 import sqlite3
 import tempfile
-from datetime import datetime
+import zipfile
+from datetime import datetime, timedelta
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -277,25 +279,40 @@ def migrate_all_from_supabase(force: bool = False) -> dict:
 
 # ── Backup engine ─────────────────────────────────────────────────────────────
 
-def _export_shifts_csv(path: str) -> int:
-    """Write shifts table to CSV; returns row count."""
+def _get_all_tables(conn: sqlite3.Connection) -> list[str]:
+    """Return all user table names from the SQLite DB dynamically."""
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+    ).fetchall()
+    return [r["name"] for r in rows]
+
+
+def _export_all_tables_zip(path: str) -> dict[str, int]:
+    """
+    Export every table in the DB to a CSV inside a ZIP file.
+    Returns {table_name: row_count} for all tables.
+    New tables are picked up automatically — no hardcoded names.
+    """
+    summary: dict[str, int] = {}
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM shifts ORDER BY shift_date").fetchall()
+        tables = _get_all_tables(conn)
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for table in tables:
+                rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                if rows:
+                    writer.writerow(rows[0].keys())   # dynamic headers
+                    writer.writerows(rows)
+                else:
+                    writer.writerow([])               # empty table → empty CSV
+                zf.writestr(f"{table}.csv", buf.getvalue())
+                summary[table] = len(rows)
+                log.info("  %s: %d rows", table, len(rows))
+    return summary
 
-    if not rows:
-        log.info("Shifts table is empty – nothing to export.")
-        return 0
 
-    with open(path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.writer(f)
-        writer.writerow(rows[0].keys())
-        writer.writerows(rows)
-
-    log.info("Exported %d rows to %s", len(rows), path)
-    return len(rows)
-
-
-def _send_to_telegram(path: str, caption: str) -> None:
+def _send_to_telegram(path: str, caption: str, filename: str) -> None:
     """Send a file to the configured Telegram chat."""
     if not TELEGRAM_TOKEN or not CHAT_ID:
         raise EnvironmentError("TELEGRAM_TOKEN and CHAT_ID env-vars must be set.")
@@ -305,38 +322,44 @@ def _send_to_telegram(path: str, caption: str) -> None:
         resp = requests.post(
             url,
             data={"chat_id": CHAT_ID, "caption": caption},
-            files={"document": f},
-            timeout=30,
+            files={"document": (filename, f)},
+            timeout=60,
         )
     resp.raise_for_status()
     log.info("Telegram response: %s", resp.json().get("ok"))
 
 
 def run_backup() -> None:
-    """Full backup flow: export CSV → send to Telegram → delete temp file."""
+    """Full backup flow: export all tables → ZIP → send to Telegram → cleanup."""
     log.info("Starting Backup...")
     tmp_path = None
     try:
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M")
         tmp = tempfile.NamedTemporaryFile(
-            suffix=".csv",
-            prefix=f"shifts_{datetime.utcnow().strftime('%Y%m%d_')}",
+            suffix=".zip",
+            prefix=f"backup_{stamp}_",
             delete=False,
         )
         tmp_path = tmp.name
         tmp.close()
 
-        row_count = _export_shifts_csv(tmp_path)
-        if row_count == 0:
-            log.info("Backup skipped – empty table.")
+        summary = _export_all_tables_zip(tmp_path)
+        total_rows = sum(summary.values())
+
+        if total_rows == 0:
+            log.info("Backup skipped – all tables empty.")
             return
 
+        table_lines = "\n".join(f"  {t}: {n}" for t, n in summary.items())
         caption = (
             f"📦 Daily DB backup\n"
             f"Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC\n"
-            f"Rows: {row_count}"
+            f"Tables: {len(summary)} | Rows: {total_rows}\n"
+            f"{table_lines}"
         )
-        _send_to_telegram(tmp_path, caption)
-        log.info("Backup Sent ✓")
+        filename = f"backup_{stamp}.zip"
+        _send_to_telegram(tmp_path, caption, filename)
+        log.info("Backup Sent ✓ (%d tables, %d rows)", len(summary), total_rows)
 
     except EnvironmentError as e:
         log.error("Error: missing config – %s", e)
@@ -385,3 +408,20 @@ def stop_scheduler() -> None:
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
         log.info("Backup scheduler stopped.")
+
+
+def schedule_test_backup(delay_minutes: int = 2) -> str:
+    """Schedule a one-time test backup N minutes from now. Returns scheduled time."""
+    global _scheduler
+    if not _scheduler or not _scheduler.running:
+        raise RuntimeError("Scheduler is not running.")
+    run_at = datetime.utcnow() + timedelta(minutes=delay_minutes)
+    _scheduler.add_job(
+        run_backup,
+        trigger="date",
+        run_date=run_at,
+        id="test_backup",
+        replace_existing=True,
+    )
+    log.info("Test backup scheduled for %s UTC", run_at.strftime("%H:%M:%S"))
+    return run_at.strftime("%Y-%m-%d %H:%M:%S UTC")
