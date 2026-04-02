@@ -11,6 +11,7 @@ import { useDesign, type DesignPreset } from "./hooks/useDesign";
 import { useFontSize } from "./hooks/useFontSize";
 import { ReadOnlyContext } from "./hooks/useReadOnly";
 import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
+import RestoreSection from "./components/RestoreSection";
 
 const TABS = [
   { id: "shifts",   Icon: ShiftsIcon,   label: "משמרות"    },
@@ -223,6 +224,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         <button onClick={save} className="btn-primary w-full">
           {saved ? "✅ נשמר!" : "שמור"}
         </button>
+
+        <hr className="border-bg-border" />
+
+        <RestoreSection />
       </div>
     </div>
   );

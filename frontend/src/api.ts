@@ -81,3 +81,31 @@ export const getSuggest = (limit = 3) =>
 export const getWhatsapp = () =>
   req<{ url: string; text: string }>("/whatsapp");
 
+// Backup & Restore
+export type RestoreTablePreview = { name: string; rows: number };
+export type RestoreTableConfig = { name: string; mode: "replace" | "merge" };
+export type RestoreResult = { ok: boolean; results: Record<string, { ok: boolean; inserted?: number; error?: string }> };
+
+export async function restorePreview(file: File): Promise<{ tables: RestoreTablePreview[] }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/admin/restore/preview`, { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function restoreBackup(file: File, tables: RestoreTableConfig[], pin: string): Promise<RestoreResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("config", JSON.stringify({ pin, tables }));
+  const res = await fetch(`${BASE}/admin/restore`, { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+

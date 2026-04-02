@@ -1,7 +1,7 @@
 """מצבת כוח – FastAPI Backend v3"""
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -1208,6 +1208,97 @@ def test_backup_endpoint(delay_minutes: int = 2):
     except Exception as e:
         return {"ok": False, "error": str(e), "trace": traceback.format_exc()}
 
+
+@app.post("/api/admin/restore/preview")
+async def restore_preview(file: UploadFile = File(...)):
+    """Parse uploaded ZIP backup and return list of tables with row counts."""
+    import zipfile
+    data = await file.read()
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise HTTPException(400, "קובץ ZIP לא תקין")
+
+    tables = []
+    for name in sorted(zf.namelist()):
+        if not name.endswith(".csv"):
+            continue
+        table_name = name[:-4]
+        content = zf.read(name).decode("utf-8-sig")
+        rows = list(csv.DictReader(io.StringIO(content)))
+        tables.append({"name": table_name, "rows": len(rows)})
+
+    if not tables:
+        raise HTTPException(400, "לא נמצאו טבלאות בגיבוי")
+
+    return {"tables": tables}
+
+
+@app.post("/api/admin/restore")
+async def restore_backup(
+    file: UploadFile = File(...),
+    config: str = Form(...),  # JSON: {pin, tables: [{name, mode}]}
+):
+    """Restore selected tables from ZIP. Requires admin PIN."""
+    import zipfile, json
+    try:
+        cfg = json.loads(config)
+    except Exception:
+        raise HTTPException(400, "קונפיגורציה לא תקינה")
+
+    pin = cfg.get("pin", "")
+    admin_pin = os.getenv("PIN_CODE", "")
+    if admin_pin and pin != admin_pin:
+        raise HTTPException(403, "קוד PIN שגוי")
+
+    data = await file.read()
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise HTTPException(400, "קובץ ZIP לא תקין")
+
+    selected: dict[str, str] = {t["name"]: t["mode"] for t in cfg.get("tables", [])}
+
+    results: dict[str, dict] = {}
+    with get_conn() as conn:
+        for table_name, mode in selected.items():
+            csv_name = f"{table_name}.csv"
+            if csv_name not in zf.namelist():
+                results[table_name] = {"ok": False, "error": "לא נמצא בגיבוי"}
+                continue
+
+            exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,)
+            ).fetchone()
+            if not exists:
+                results[table_name] = {"ok": False, "error": "טבלה לא קיימת במסד"}
+                continue
+
+            content = zf.read(csv_name).decode("utf-8-sig")
+            rows = list(csv.DictReader(io.StringIO(content)))
+            if not rows:
+                results[table_name] = {"ok": True, "inserted": 0}
+                continue
+
+            cols = list(rows[0].keys())
+            col_str = ", ".join(cols)
+            placeholders = ", ".join("?" for _ in cols)
+
+            if mode == "replace":
+                conn.execute(f"DELETE FROM {table_name}")
+
+            insert_sql = f"INSERT OR IGNORE INTO {table_name} ({col_str}) VALUES ({placeholders})"
+            inserted = 0
+            for row in rows:
+                try:
+                    conn.execute(insert_sql, [row.get(c) for c in cols])
+                    inserted += 1
+                except Exception:
+                    pass
+
+            results[table_name] = {"ok": True, "inserted": inserted}
+
+    return {"ok": True, "results": results}
 
 
 @app.post("/api/admin/seed-absences", status_code=201)
