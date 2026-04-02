@@ -169,10 +169,11 @@ def _send_telegram_message(text: str) -> None:
 
 def process_reminders() -> None:
     """Check and send due recurring reminders. Runs every minute."""
+    import zoneinfo
     from datetime import date as _date
-    import sqlite3 as _sqlite3
 
-    now = datetime.now()
+    tz = zoneinfo.ZoneInfo("Asia/Jerusalem")
+    now = datetime.now(tz)
     today_str = now.strftime("%Y-%m-%d")
     current_time = now.strftime("%H:%M")
 
@@ -250,7 +251,7 @@ def start_scheduler() -> None:
         log.warning("Scheduler already running.")
         return
 
-    _scheduler = BackgroundScheduler(timezone="UTC")
+    _scheduler = BackgroundScheduler(timezone="Asia/Jerusalem")
     _scheduler.add_job(
         run_backup,
         trigger=CronTrigger(hour=3, minute=0),
