@@ -182,8 +182,6 @@ function RestoreSection() {
 }
 
 // ── Reminders Section ─────────────────────────────────────────────────────────
-const WEEKDAYS = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
-
 function RemindersSection() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [showForm, setShowForm] = useState(false);
