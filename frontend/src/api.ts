@@ -115,6 +115,8 @@ export const createReminder = (body: ReminderCreate) =>
   req<{ ok: boolean; id: number }>("/reminders", { method: "POST", body: JSON.stringify(body) });
 export const toggleReminder = (id: number) =>
   req<{ ok: boolean; is_active: number }>(`/reminders/${id}/toggle`, { method: "PUT" });
+export const updateReminder = (id: number, body: ReminderCreate) =>
+  req<{ ok: boolean }>(`/reminders/${id}`, { method: "PUT", body: JSON.stringify(body) });
 export const deleteReminder = (id: number) =>
   req<{ ok: boolean }>(`/reminders/${id}`, { method: "DELETE" });
 

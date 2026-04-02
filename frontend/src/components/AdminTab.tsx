@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getReminders, createReminder, toggleReminder, deleteReminder,
+  getReminders, createReminder, updateReminder, toggleReminder, deleteReminder,
   restorePreview, restoreBackup,
   type Reminder, type ReminderCreate,
   type RestoreTablePreview, type RestoreTableConfig,
@@ -181,19 +181,28 @@ function RestoreSection() {
   );
 }
 
+const EMPTY_FORM: ReminderCreate = { task_name: "", start_date: "", interval_days: 1, send_time: "08:00", message_text: "" };
+
 // ── Reminders Section ─────────────────────────────────────────────────────────
 function RemindersSection() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<ReminderCreate>({
-    task_name: "", start_date: "", interval_days: 1,
-    send_time: "08:00", message_text: "",
-  });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<ReminderCreate>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const load = () => getReminders().then(setReminders).catch(() => {});
   useEffect(() => { load(); }, []);
+
+  const openAdd = () => { setEditingId(null); setForm(EMPTY_FORM); setError(""); setShowForm(true); };
+  const openEdit = (r: Reminder) => {
+    setEditingId(r.id);
+    setForm({ task_name: r.task_name, start_date: r.start_date, interval_days: r.interval_days, send_time: r.send_time, message_text: r.message_text });
+    setError("");
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditingId(null); setForm(EMPTY_FORM); setError(""); };
 
   const save = async () => {
     if (!form.task_name || !form.start_date || !form.message_text) {
@@ -201,10 +210,12 @@ function RemindersSection() {
     }
     setSaving(true);
     try {
-      await createReminder(form);
-      setShowForm(false);
-      setForm({ task_name: "", start_date: "", interval_days: 1, send_time: "08:00", message_text: "" });
-      setError("");
+      if (editingId !== null) {
+        await updateReminder(editingId, form);
+      } else {
+        await createReminder(form);
+      }
+      closeForm();
       load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "שגיאה");
@@ -213,40 +224,31 @@ function RemindersSection() {
     }
   };
 
-  const toggle = async (id: number) => {
-    await toggleReminder(id).catch(() => {});
-    load();
-  };
-
+  const toggle = async (id: number) => { await toggleReminder(id).catch(() => {}); load(); };
   const remove = async (id: number) => {
     if (!confirm("למחוק תזכורת זו?")) return;
     await deleteReminder(id).catch(() => {});
     load();
   };
 
-  const today = new Date().toISOString().slice(0, 10);
-
   return (
     <section className="card space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-text">🔔 תזכורות מחזוריות</h3>
-        <button onClick={() => setShowForm((v) => !v)} className="btn-ghost text-xs px-3 py-1">
+        <button onClick={showForm ? closeForm : openAdd} className="btn-ghost text-xs px-3 py-1">
           {showForm ? "ביטול" : "+ הוסף"}
         </button>
       </div>
 
       {showForm && (
         <div className="bg-bg-base rounded-xl p-3 space-y-2">
-          <input
-            placeholder="שם משימה"
-            value={form.task_name}
+          <input placeholder="שם משימה" value={form.task_name}
             onChange={(e) => setForm((p) => ({ ...p, task_name: e.target.value }))}
-            className="input w-full text-sm"
-          />
+            className="input w-full text-sm" />
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-xs text-text-dim block mb-1">תאריך התחלה</label>
-              <input type="date" value={form.start_date} min={today}
+              <input type="date" value={form.start_date}
                 onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))}
                 className="input w-full text-sm" />
             </div>
@@ -272,7 +274,7 @@ function RemindersSection() {
           </div>
           {error && <p className="text-xs text-danger">{error}</p>}
           <button onClick={save} disabled={saving} className="btn-primary w-full disabled:opacity-50">
-            {saving ? "שומר..." : "שמור תזכורת"}
+            {saving ? "שומר..." : editingId !== null ? "עדכן תזכורת" : "שמור תזכורת"}
           </button>
         </div>
       )}
@@ -292,13 +294,16 @@ function RemindersSection() {
                   <p className="text-xs text-text-dim">נשלח לאחרונה: {r.last_sent_date}</p>
                 )}
               </div>
-              <button
-                onClick={() => toggle(r.id)}
-                className={`text-xs px-2 py-1 rounded-lg border shrink-0 ${r.is_active ? "border-success/40 text-success" : "border-bg-border text-text-dim"}`}
-              >
+              <button onClick={() => toggle(r.id)}
+                className={`text-xs px-2 py-1 rounded-lg border shrink-0 ${r.is_active ? "border-success/40 text-success" : "border-bg-border text-text-dim"}`}>
                 {r.is_active ? "פעיל" : "כבוי"}
               </button>
-              <button onClick={() => remove(r.id)} className="text-danger hover:opacity-70 shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center">
+              <button onClick={() => openEdit(r)}
+                className="text-text-dim hover:text-primary shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center text-sm">
+                ✏️
+              </button>
+              <button onClick={() => remove(r.id)}
+                className="text-danger hover:opacity-70 shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center">
                 🗑
               </button>
             </div>

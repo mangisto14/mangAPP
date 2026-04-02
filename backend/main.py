@@ -1381,6 +1381,21 @@ def delete_reminder(reminder_id: int):
     return {"ok": True}
 
 
+@app.put("/api/reminders/{reminder_id}")
+def update_reminder(reminder_id: int, body: ReminderCreateBody):
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM recurring_reminders WHERE id=?", (reminder_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "לא נמצא")
+        conn.execute(
+            """UPDATE recurring_reminders
+               SET task_name=?, start_date=?, interval_days=?, send_time=?, message_text=?
+               WHERE id=?""",
+            (body.task_name, body.start_date, body.interval_days, body.send_time, body.message_text, reminder_id),
+        )
+    return {"ok": True}
+
+
 # ── Rotation ──────────────────────────────────────────────────────────────────
 def _default_rotation_period_ranges(start_date: str, count: int) -> List[dict]:
     try:
