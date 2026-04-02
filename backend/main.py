@@ -141,6 +141,18 @@ def init_db() -> None:
                 end_date   TEXT NOT NULL
             )
         """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS recurring_reminders (
+                {_SERIAL_PK},
+                task_name     TEXT NOT NULL,
+                start_date    TEXT NOT NULL,
+                interval_days INTEGER NOT NULL DEFAULT 1,
+                send_time     TEXT NOT NULL,
+                message_text  TEXT NOT NULL,
+                last_sent_date TEXT,
+                is_active     INTEGER NOT NULL DEFAULT 1
+            )
+        """)
         # Safe migrations for existing DBs
         migrations = [
             "ALTER TABLE guards ADD COLUMN phone TEXT",
@@ -696,6 +708,14 @@ class RotationRoleUpdateBody(BaseModel):
 
 class RotationSlotsUpdateBody(BaseModel):
     slots: List[List[str]]  # 3 lists, one per slot
+
+
+class ReminderCreateBody(BaseModel):
+    task_name:     str
+    start_date:    str
+    interval_days: int
+    send_time:     str
+    message_text:  str
 
 
 # ── Health / Debug ────────────────────────────────────────────────────────────
@@ -1322,6 +1342,43 @@ def seed_absences(body: SeedAbsencesBody):
                 (guard_id, item.left_at),
             )
     return {"ok": True, "count": len(body.guards)}
+
+
+@app.get("/api/reminders")
+def list_reminders():
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM recurring_reminders ORDER BY id").fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/reminders", status_code=201)
+def create_reminder(body: ReminderCreateBody):
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO recurring_reminders
+               (task_name, start_date, interval_days, send_time, message_text)
+               VALUES (?, ?, ?, ?, ?)""",
+            (body.task_name, body.start_date, body.interval_days, body.send_time, body.message_text),
+        )
+    return {"ok": True, "id": cur.lastrowid}
+
+
+@app.put("/api/reminders/{reminder_id}/toggle")
+def toggle_reminder(reminder_id: int):
+    with get_conn() as conn:
+        row = conn.execute("SELECT is_active FROM recurring_reminders WHERE id=?", (reminder_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "לא נמצא")
+        new_val = 0 if row["is_active"] else 1
+        conn.execute("UPDATE recurring_reminders SET is_active=? WHERE id=?", (new_val, reminder_id))
+    return {"ok": True, "is_active": new_val}
+
+
+@app.delete("/api/reminders/{reminder_id}")
+def delete_reminder(reminder_id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM recurring_reminders WHERE id=?", (reminder_id,))
+    return {"ok": True}
 
 
 # ── Rotation ──────────────────────────────────────────────────────────────────

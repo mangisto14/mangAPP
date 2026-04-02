@@ -152,6 +152,88 @@ def run_backup() -> None:
             except OSError as e:
                 log.warning("Could not delete temp file: %s", e)
 
+# ── Recurring Reminders ───────────────────────────────────────────────────────
+
+def _send_telegram_message(text: str) -> None:
+    """Send a plain text message to the configured Telegram chat."""
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        raise EnvironmentError("TELEGRAM_TOKEN and CHAT_ID env-vars must be set.")
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    resp = requests.post(
+        url,
+        json={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+
+
+def process_reminders() -> None:
+    """Check and send due recurring reminders. Runs every minute."""
+    from datetime import date as _date
+    import sqlite3 as _sqlite3
+
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    current_time = now.strftime("%H:%M")
+
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM recurring_reminders WHERE is_active=1 AND send_time=?",
+                (current_time,),
+            ).fetchall()
+
+            for r in rows:
+                # Skip if already sent today
+                if r["last_sent_date"] == today_str:
+                    continue
+
+                # Check if today is a send day
+                try:
+                    start = _date.fromisoformat(r["start_date"])
+                    today = _date.fromisoformat(today_str)
+                    days_since_start = (today - start).days
+                    if days_since_start < 0:
+                        continue
+                    if days_since_start % r["interval_days"] != 0:
+                        continue
+                except Exception:
+                    continue
+
+                # Send message
+                try:
+                    _send_telegram_message(r["message_text"])
+                    conn.execute(
+                        "UPDATE recurring_reminders SET last_sent_date=? WHERE id=?",
+                        (today_str, r["id"]),
+                    )
+                    log.info("Reminder sent: %s (id=%d)", r["task_name"], r["id"])
+                except Exception as e:
+                    log.error("Failed to send reminder id=%d: %s", r["id"], e)
+
+    except Exception as e:
+        log.error("process_reminders error: %s", e)
+
+
+def add_reminder(
+    task_name: str,
+    start_date: str,
+    interval_days: int,
+    send_time: str,
+    message_text: str,
+) -> int:
+    """Helper: insert a new recurring reminder. Returns new row id."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO recurring_reminders
+               (task_name, start_date, interval_days, send_time, message_text)
+               VALUES (?, ?, ?, ?, ?)""",
+            (task_name, start_date, interval_days, send_time, message_text),
+        )
+        log.info("Reminder added: %s (id=%d)", task_name, cur.lastrowid)
+        return cur.lastrowid
+
+
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
 _scheduler: BackgroundScheduler | None = None
@@ -173,6 +255,13 @@ def start_scheduler() -> None:
         run_backup,
         trigger=CronTrigger(hour=3, minute=0),
         id="daily_backup",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        process_reminders,
+        trigger="interval",
+        minutes=1,
+        id="process_reminders",
         replace_existing=True,
     )
     _scheduler.start()

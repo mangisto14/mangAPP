@@ -10,15 +10,16 @@ import type { AlertThreshold } from "./features/absences/types";
 import { useDesign, type DesignPreset } from "./hooks/useDesign";
 import { useFontSize } from "./hooks/useFontSize";
 import { ReadOnlyContext } from "./hooks/useReadOnly";
-import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon } from "./components/TabIcons";
-import RestoreSection from "./components/RestoreSection";
+import { ShiftsIcon, AbsencesIcon, RotationIcon, GuardsIcon, StatsIcon, AdminIcon } from "./components/TabIcons";
+import AdminTab from "./components/AdminTab";
 
 const TABS = [
-  { id: "shifts",   Icon: ShiftsIcon,   label: "משמרות"    },
-  { id: "absences", Icon: AbsencesIcon, label: "יציאות"    },
-  { id: "rotation", Icon: RotationIcon, label: "סבב"       },
-  { id: "guards",   Icon: GuardsIcon,   label: "כוח אדם"   },
-  { id: "stats",    Icon: StatsIcon,    label: "סטטיסטיקה" },
+  { id: "shifts",   Icon: ShiftsIcon,   label: "משמרות",    adminOnly: false },
+  { id: "absences", Icon: AbsencesIcon, label: "יציאות",    adminOnly: false },
+  { id: "rotation", Icon: RotationIcon, label: "סבב",       adminOnly: false },
+  { id: "guards",   Icon: GuardsIcon,   label: "כוח אדם",   adminOnly: false },
+  { id: "stats",    Icon: StatsIcon,    label: "סטטיסטיקה", adminOnly: false },
+  { id: "admin",    Icon: AdminIcon,    label: "ניהול",      adminOnly: true  },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -224,10 +225,6 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         <button onClick={save} className="btn-primary w-full">
           {saved ? "✅ נשמר!" : "שמור"}
         </button>
-
-        <hr className="border-bg-border" />
-
-        <RestoreSection />
       </div>
     </div>
   );
@@ -386,6 +383,7 @@ export default function App() {
         {tab === "rotation" && <RotationTab />}
         {tab === "guards"   && <GuardsTab />}
         {tab === "stats"    && <StatsTab />}
+        {tab === "admin"    && !readOnly && <AdminTab />}
       </main>
 
       {/* ── Bottom Navigation ── */}
@@ -398,7 +396,7 @@ export default function App() {
           }`}
       >
         <div className="max-w-2xl mx-auto flex" role="tablist">
-          {TABS.filter((t) => !(readOnly && t.id === "absences")).map((t) => {
+          {TABS.filter((t) => !(readOnly && (t.id === "absences" || t.adminOnly))).map((t) => {
             const active = tab === t.id;
             return (
               <button

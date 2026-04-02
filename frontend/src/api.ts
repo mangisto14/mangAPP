@@ -97,6 +97,27 @@ export async function restorePreview(file: File): Promise<{ tables: RestoreTable
   return res.json();
 }
 
+// Reminders
+export type Reminder = {
+  id: number;
+  task_name: string;
+  start_date: string;
+  interval_days: number;
+  send_time: string;
+  message_text: string;
+  last_sent_date: string | null;
+  is_active: number;
+};
+export type ReminderCreate = Omit<Reminder, "id" | "last_sent_date" | "is_active">;
+
+export const getReminders = () => req<Reminder[]>("/reminders");
+export const createReminder = (body: ReminderCreate) =>
+  req<{ ok: boolean; id: number }>("/reminders", { method: "POST", body: JSON.stringify(body) });
+export const toggleReminder = (id: number) =>
+  req<{ ok: boolean; is_active: number }>(`/reminders/${id}/toggle`, { method: "PUT" });
+export const deleteReminder = (id: number) =>
+  req<{ ok: boolean }>(`/reminders/${id}`, { method: "DELETE" });
+
 export async function restoreBackup(file: File, tables: RestoreTableConfig[], pin: string): Promise<RestoreResult> {
   const form = new FormData();
   form.append("file", file);
