@@ -168,15 +168,15 @@ export default function AddShiftTab({ onSaved }: Props) {
     [activeOnAbsences]
   );
 
-  // כתום: יצא מסיבה אחרת (רופא, אישי, אחר, ללא סיבה) — ספציפי לתאריך הנבחר
+  // כתום: יצא מסיבה אחרת (רופא, אישי, אחר, ללא סיבה)
   const tempOutNames = useMemo(
     () =>
       new Set(
-        activeOnAbsences
-          .filter((a) => !a.reason || !ABSENT_REASONS.includes(a.reason))
+        absences
+          .filter((a) => a.is_out && (!a.reason || !ABSENT_REASONS.includes(a.reason)))
           .map((a) => a.name.toLowerCase())
       ),
-    [activeOnAbsences]
+    [absences]
   );
 
   type GuardStatus = "rotation-available" | "rotation-start" | "rotation-returning" | "rotation-absent" | "rotation-temp" | "absent" | "temp-out" | "default";
@@ -474,10 +474,10 @@ export default function AddShiftTab({ onSaved }: Props) {
                       {status === "rotation-returning" && (
                         <span className="text-warning text-[10px] font-bold">חוזר מסבב</span>
                       )}
-                      {(status === "absent" || status === "rotation-absent") && (
+                      {(status === "absent" || status === "rotation-absent" || status === "rotation-temp") && (
                         <span className="text-danger text-[10px] font-bold">נעדר</span>
                       )}
-                      {(status === "temp-out" || status === "rotation-temp") && (
+                      {status === "temp-out" && (
                         <span className="text-warning text-[10px] font-bold">יצא</span>
                       )}
                     </div>
