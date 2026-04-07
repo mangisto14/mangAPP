@@ -5,8 +5,7 @@ import type { Guard, StagedShift, Suggestion } from "../types";
 import { getRotation } from "../features/rotation/api";
 import { computePeriods } from "../features/rotation/utils";
 import type { RotationConfig } from "../features/rotation/types";
-import { getAbsences, getAbsencesActiveOn } from "../features/absences/api";
-import type { AbsenceStatus } from "../features/absences/types";
+import { getAbsencesActiveOn } from "../features/absences/api";
 
 function toLocalIso(date: string, time: string) {
   return `${date}T${time}:00`;
@@ -59,7 +58,6 @@ export default function AddShiftTab({ onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [rotation, setRotation] = useState<RotationConfig | null>(null);
-  const [absences, setAbsences] = useState<AbsenceStatus[]>([]);
   const [activeOnAbsences, setActiveOnAbsences] = useState<{ name: string; reason: string | null }[]>([]);
   const [assignedToday, setAssignedToday] = useState<Set<string>>(new Set());
 
@@ -67,12 +65,10 @@ export default function AddShiftTab({ onSaved }: Props) {
     getGuards().then(setGuards).catch(console.error);
     getSuggest(3).then(setSuggestions).catch(console.error);
     getRotation().then(setRotation).catch(console.error);
-    getAbsences().then(setAbsences).catch(console.error);
   }, []);
 
-  // כשהתאריך משתנה: רענן יציאות נוכחיות (לצבע כתום) + חופשות שחופפות לתאריך (לצבע אדום)
+  // כשהתאריך משתנה: רענן יציאות שחופפות לתאריך
   useEffect(() => {
-    getAbsences().then(setAbsences).catch(console.error);
     if (date) getAbsencesActiveOn(date).then(setActiveOnAbsences).catch(console.error);
   }, [date]);
 
