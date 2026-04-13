@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getReminders, createReminder, updateReminder, toggleReminder, deleteReminder,
+  getReminders, createReminder, updateReminder, toggleReminder, deleteReminder, testReminder,
   restorePreview, restoreBackup,
   type Reminder, type ReminderCreate,
   type RestoreTablePreview, type RestoreTableConfig,
@@ -230,6 +230,20 @@ function RemindersSection() {
     await deleteReminder(id).catch(() => {});
     load();
   };
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [testResult, setTestResult] = useState<Record<number, "ok" | "err">>({});
+  const test = async (id: number) => {
+    setTestingId(id);
+    try {
+      await testReminder(id);
+      setTestResult((p) => ({ ...p, [id]: "ok" }));
+    } catch {
+      setTestResult((p) => ({ ...p, [id]: "err" }));
+    } finally {
+      setTestingId(null);
+      setTimeout(() => setTestResult((p) => { const n = { ...p }; delete n[id]; return n; }), 3000);
+    }
+  };
 
   return (
     <section className="card space-y-3">
@@ -297,6 +311,11 @@ function RemindersSection() {
               <button onClick={() => toggle(r.id)}
                 className={`text-xs px-2 py-1 rounded-lg border shrink-0 ${r.is_active ? "border-success/40 text-success" : "border-bg-border text-text-dim"}`}>
                 {r.is_active ? "פעיל" : "כבוי"}
+              </button>
+              <button onClick={() => test(r.id)} disabled={testingId === r.id}
+                title="שלח הודעת בדיקה"
+                className="text-text-dim hover:text-warning shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center text-sm disabled:opacity-40">
+                {testingId === r.id ? "⏳" : testResult[r.id] === "ok" ? "✅" : testResult[r.id] === "err" ? "❌" : "🧪"}
               </button>
               <button onClick={() => openEdit(r)}
                 className="text-text-dim hover:text-primary shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center text-sm">

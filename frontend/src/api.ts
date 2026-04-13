@@ -119,6 +119,8 @@ export const updateReminder = (id: number, body: ReminderCreate) =>
   req<{ ok: boolean }>(`/reminders/${id}`, { method: "PUT", body: JSON.stringify(body) });
 export const deleteReminder = (id: number) =>
   req<{ ok: boolean }>(`/reminders/${id}`, { method: "DELETE" });
+export const testReminder = (id: number) =>
+  req<{ ok: boolean }>(`/reminders/${id}/test`, { method: "POST" });
 
 export async function restoreBackup(file: File, tables: RestoreTableConfig[], pin: string): Promise<RestoreResult> {
   const form = new FormData();

@@ -1396,6 +1396,21 @@ def update_reminder(reminder_id: int, body: ReminderCreateBody):
     return {"ok": True}
 
 
+@app.post("/api/reminders/{reminder_id}/test")
+def test_reminder(reminder_id: int):
+    """Send reminder message immediately with [🧪 בדיקה] prefix. Does not update last_sent_date."""
+    from backend.backup_manager import _send_telegram_message
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM recurring_reminders WHERE id=?", (reminder_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "לא נמצא")
+    try:
+        _send_telegram_message(f"🧪 בדיקה | {row['task_name']}\n\n{row['message_text']}")
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 # ── Rotation ──────────────────────────────────────────────────────────────────
 def _default_rotation_period_ranges(start_date: str, count: int) -> List[dict]:
     try:
