@@ -30,7 +30,7 @@ function BackupSection() {
   return (
     <section className="card space-y-3">
       <h3 className="font-bold text-text">📦 גיבוי</h3>
-      <p className="text-xs text-text-dim">גיבוי יומי אוטומטי נשלח ל-Telegram בכל יום 03:00 UTC.</p>
+      <p className="text-xs text-text-dim">גיבוי יומי אוטומטי נשלח ל-Telegram בכל יום 03:00 (Asia/Jerusalem).</p>
       <button onClick={triggerBackup} disabled={loading} className="btn-primary w-full disabled:opacity-50">
         {loading ? "מתזמן..." : "שלח גיבוי עכשיו (בעוד 2 דקות)"}
       </button>

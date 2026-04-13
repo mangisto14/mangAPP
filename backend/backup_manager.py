@@ -20,6 +20,7 @@ import sqlite3
 import tempfile
 import zipfile
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -37,6 +38,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger("backup")
+APP_TZ = ZoneInfo("Asia/Jerusalem")
+TEST_BACKUP_MISFIRE_GRACE_SECONDS = 4 * 60 * 60
 
 # ── SQLite helpers ────────────────────────────────────────────────────────────
 
@@ -251,7 +254,7 @@ def start_scheduler() -> None:
         log.warning("Scheduler already running.")
         return
 
-    _scheduler = BackgroundScheduler(timezone="Asia/Jerusalem")
+    _scheduler = BackgroundScheduler(timezone=str(APP_TZ))
     _scheduler.add_job(
         run_backup,
         trigger=CronTrigger(hour=3, minute=0),
@@ -266,7 +269,7 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
     _scheduler.start()
-    log.info("Backup scheduler started – next run at 03:00 UTC.")
+    log.info("Backup scheduler started – next run at 03:00 %s.", datetime.now(APP_TZ).strftime("%Z"))
 
 
 def stop_scheduler() -> None:
@@ -282,13 +285,19 @@ def schedule_test_backup(delay_minutes: int = 2) -> str:
     global _scheduler
     if not _scheduler or not _scheduler.running:
         raise RuntimeError("Scheduler is not running.")
-    run_at = datetime.utcnow() + timedelta(minutes=delay_minutes)
+    run_at = datetime.now(APP_TZ) + timedelta(minutes=delay_minutes)
     _scheduler.add_job(
         run_backup,
         trigger="date",
         run_date=run_at,
         id="test_backup",
         replace_existing=True,
+        misfire_grace_time=TEST_BACKUP_MISFIRE_GRACE_SECONDS,
     )
-    log.info("Test backup scheduled for %s UTC", run_at.strftime("%H:%M:%S"))
-    return run_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+    log.info(
+        "Test backup scheduled for %s %s (misfire grace: %ss)",
+        run_at.strftime("%H:%M:%S"),
+        run_at.strftime("%Z"),
+        TEST_BACKUP_MISFIRE_GRACE_SECONDS,
+    )
+    return run_at.strftime("%Y-%m-%d %H:%M:%S %Z")
