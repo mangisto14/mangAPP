@@ -28,9 +28,21 @@ from apscheduler.triggers.cron import CronTrigger
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DB_PATH        = os.getenv("DB_PATH", "/app/data/database.db")
+DB_PATH        = os.getenv("DB_PATH", "")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 CHAT_ID        = os.getenv("CHAT_ID", "")
+
+
+def _resolve_db_path() -> str:
+    """Same resolution logic as main.py — checks RAILWAY_VOLUME_MOUNT_PATH first."""
+    if DB_PATH:
+        return DB_PATH
+    volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if volume:
+        return os.path.join(volume, "database.db")
+    if os.path.exists("/app/data"):
+        return "/app/data/database.db"
+    return os.path.join(os.path.dirname(__file__), "..", "database.db")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,14 +56,15 @@ TEST_BACKUP_MISFIRE_GRACE_SECONDS = 4 * 60 * 60
 # ── SQLite helpers ────────────────────────────────────────────────────────────
 
 def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_resolve_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_schema() -> None:
     """Ensure the data directory exists. Tables are created by main.py init_db()."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    path = _resolve_db_path()
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     log.info("Schema initialised (or already exists).")
 
 
