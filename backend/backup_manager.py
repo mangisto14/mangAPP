@@ -276,10 +276,10 @@ def start_scheduler() -> None:
     )
     _scheduler.add_job(
         process_reminders,
-        trigger="interval",
-        minutes=1,
+        trigger=CronTrigger(second=0),
         id="process_reminders",
         replace_existing=True,
+        misfire_grace_time=59,
     )
     _scheduler.start()
     log.info("Backup scheduler started – next run at 03:00 %s.", datetime.now(APP_TZ).strftime("%Z"))
