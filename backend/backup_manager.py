@@ -185,39 +185,46 @@ def _send_telegram_message(text: str) -> None:
 
 def process_reminders() -> None:
     """Check and send due recurring reminders. Runs every minute."""
-    import zoneinfo
     from datetime import date as _date
 
-    tz = zoneinfo.ZoneInfo("Asia/Jerusalem")
-    now = datetime.now(tz)
+    now = datetime.now(APP_TZ)
     today_str = now.strftime("%Y-%m-%d")
     current_time = now.strftime("%H:%M")
 
+    log.info("process_reminders tick: %s %s (Israel)", today_str, current_time)
+
     try:
         with get_conn() as conn:
+            all_active = conn.execute(
+                "SELECT * FROM recurring_reminders WHERE is_active=1"
+            ).fetchall()
+            log.info("  active reminders: %d", len(all_active))
+
             rows = conn.execute(
                 "SELECT * FROM recurring_reminders WHERE is_active=1 AND send_time=?",
                 (current_time,),
             ).fetchall()
+            log.info("  matching send_time=%s: %d", current_time, len(rows))
 
             for r in rows:
-                # Skip if already sent today
                 if r["last_sent_date"] == today_str:
+                    log.info("  [%s] skip – already sent today", r["task_name"])
                     continue
 
-                # Check if today is a send day
                 try:
                     start = _date.fromisoformat(r["start_date"])
                     today = _date.fromisoformat(today_str)
                     days_since_start = (today - start).days
                     if days_since_start < 0:
+                        log.info("  [%s] skip – start_date in future (%d days)", r["task_name"], days_since_start)
                         continue
                     if days_since_start % r["interval_days"] != 0:
+                        log.info("  [%s] skip – not a send day (day %d, interval %d)", r["task_name"], days_since_start, r["interval_days"])
                         continue
-                except Exception:
+                except Exception as e:
+                    log.error("  [%s] skip – date parse error: %s", r["task_name"], e)
                     continue
 
-                # Send message
                 try:
                     _send_telegram_message(r["message_text"])
                     conn.execute(
