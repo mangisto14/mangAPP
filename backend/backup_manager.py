@@ -258,6 +258,58 @@ def add_reminder(
         return cur.lastrowid
 
 
+def catchup_reminders() -> None:
+    """
+    On startup: send any reminders whose send_time already passed today
+    but were not sent (container was down during their window).
+    """
+    from datetime import date as _date
+
+    now = datetime.now(APP_TZ)
+    today_str = now.strftime("%Y-%m-%d")
+    current_time = now.strftime("%H:%M")
+
+    log.info("catchup_reminders: checking missed reminders before %s (Israel)", current_time)
+
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                """SELECT * FROM recurring_reminders
+                   WHERE is_active=1
+                     AND send_time < ?
+                     AND (last_sent_date IS NULL OR last_sent_date != ?)""",
+                (current_time, today_str),
+            ).fetchall()
+
+            log.info("  catchup candidates: %d", len(rows))
+
+            for r in rows:
+                try:
+                    start = _date.fromisoformat(r["start_date"])
+                    today = _date.fromisoformat(today_str)
+                    days_since_start = (today - start).days
+                    if days_since_start < 0:
+                        continue
+                    if days_since_start % r["interval_days"] != 0:
+                        continue
+                except Exception as e:
+                    log.error("  [%s] catchup skip – date parse error: %s", r["task_name"], e)
+                    continue
+
+                try:
+                    _send_telegram_message(r["message_text"])
+                    conn.execute(
+                        "UPDATE recurring_reminders SET last_sent_date=? WHERE id=?",
+                        (today_str, r["id"]),
+                    )
+                    log.info("Catchup reminder sent: %s (id=%d)", r["task_name"], r["id"])
+                except Exception as e:
+                    log.error("Failed catchup reminder id=%d: %s", r["id"], e)
+
+    except Exception as e:
+        log.error("catchup_reminders error: %s", e)
+
+
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
 _scheduler: BackgroundScheduler | None = None
@@ -290,6 +342,7 @@ def start_scheduler() -> None:
     )
     _scheduler.start()
     log.info("Backup scheduler started – next run at 03:00 %s.", datetime.now(APP_TZ).strftime("%Z"))
+    catchup_reminders()
 
 
 def stop_scheduler() -> None:
